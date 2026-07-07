@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 
@@ -55,9 +55,16 @@ export default function FieldLayout({ children }: { children: React.ReactNode })
           <span className="w-7 h-7 rounded-lg bg-green-600 text-white font-bold flex items-center justify-center text-sm">B</span>
           <span className="font-bold text-gray-900">Belarro</span>
         </div>
-        <button onClick={handleSignOut} className="text-xs text-gray-400 font-semibold px-2 py-1">
-          Sign out
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Non-admin sessions get redirected straight back to /field by
+              middleware, so this link is always safe to show. */}
+          <Link href="/admin" className="text-xs text-green-600 font-semibold px-2 py-1">
+            Admin
+          </Link>
+          <button onClick={handleSignOut} className="text-xs text-gray-400 font-semibold px-2 py-1">
+            Sign out
+          </button>
+        </div>
       </header>
 
       <main className="flex-1 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>

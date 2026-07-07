@@ -6,13 +6,15 @@ import { verifySession } from '@/lib/session';
  * Field visits — replaces the Google Sheet as the store for field work.
  * The `locations` table is the master record per place (same table the
  * follow-up system already uses); belarro_op_visit holds per-visit history.
+ * Field set matches Sales Tracker's LocationPanel.jsx one-for-one.
  *
  * GET  /api/field/locations                 -> active locations, newest first
  * GET  /api/field/locations?history=<id>    -> visit history for one location
  * POST /api/field/locations                 -> log a visit; body:
  *      { location_id?, location_name?, business_address?, contact_person?,
- *        direct_phone?, notes?, interest_level?, pipeline_stage?,
- *        sample_given?, language? }
+ *        contact_title?, direct_phone?, direct_email?, business_types?,
+ *        business_website?, notes?, interest_level?, pipeline_stage?,
+ *        sample_given?, uses_microgreens?, language?, lat?, lng?, place_id? }
  *      With location_id: appends a visit + updates the location row.
  *      Without: creates the location first (new place visited).
  */
@@ -22,6 +24,8 @@ async function sessionEmail(request: NextRequest): Promise<string | null> {
   const session = token ? await verifySession(token) : null;
   return session?.email || null;
 }
+
+const LOCATION_SELECT_COLS = 'id,location_name,business_address,contact_person,contact_title,direct_phone,direct_email,business_types,business_website,business_phone,business_email,interest_level,pipeline_stage,visit_notes,timestamp,sales_rep,language,uses_microgreens,direct_link';
 
 export async function GET(request: NextRequest) {
   try {
@@ -41,11 +45,11 @@ export async function GET(request: NextRequest) {
     let locations;
     try {
       locations = await fetchFromSupabase(
-        `/locations?archived=neq.YES&select=id,location_name,business_address,contact_person,direct_phone,interest_level,pipeline_stage,visit_notes,timestamp,sales_rep,language,uses_microgreens,direct_link,lat,lng&order=timestamp.desc&limit=500`
+        `/locations?archived=neq.YES&select=${LOCATION_SELECT_COLS},lat,lng&order=timestamp.desc&limit=500`
       );
     } catch {
       locations = await fetchFromSupabase(
-        `/locations?archived=neq.YES&select=id,location_name,business_address,contact_person,direct_phone,interest_level,pipeline_stage,visit_notes,timestamp,sales_rep,language,uses_microgreens,direct_link&order=timestamp.desc&limit=500`
+        `/locations?archived=neq.YES&select=${LOCATION_SELECT_COLS}&order=timestamp.desc&limit=500`
       );
     }
     return NextResponse.json({ success: true, data: locations || [] });
@@ -60,9 +64,11 @@ export async function POST(request: NextRequest) {
     const email = await sessionEmail(request);
     const body = await request.json();
     const {
-      location_id, location_name, business_address, contact_person, direct_phone,
-      notes, interest_level, pipeline_stage, sample_given, language,
-      lat, lng, direct_link, business_website, business_phone, business_email, place_id,
+      location_id, location_name, business_address,
+      contact_person, contact_title, direct_phone, direct_email,
+      business_types, business_website, business_phone, business_email,
+      notes, interest_level, pipeline_stage, sample_given, uses_microgreens, language,
+      lat, lng, direct_link, place_id,
     } = body;
 
     let locId = location_id;
@@ -76,13 +82,17 @@ export async function POST(request: NextRequest) {
         location_name,
         business_address: business_address || null,
         contact_person: contact_person || null,
+        contact_title: contact_title || null,
         direct_phone: direct_phone || null,
+        direct_email: direct_email || null,
+        business_types: business_types || null,
         business_website: business_website || null,
         business_phone: business_phone || null,
         business_email: business_email || null,
         interest_level: interest_level || 'Follow Up',
         pipeline_stage: pipeline_stage || 'new_visit',
         visit_notes: notes || null,
+        uses_microgreens: !!uses_microgreens,
         language: language || 'DE',
         sales_rep: email,
         timestamp: new Date().toISOString(),
@@ -111,7 +121,13 @@ export async function POST(request: NextRequest) {
       if (interest_level !== undefined) patch.interest_level = interest_level;
       if (pipeline_stage !== undefined) patch.pipeline_stage = pipeline_stage;
       if (contact_person !== undefined) patch.contact_person = contact_person;
+      if (contact_title !== undefined) patch.contact_title = contact_title;
       if (direct_phone !== undefined) patch.direct_phone = direct_phone;
+      if (direct_email !== undefined) patch.direct_email = direct_email;
+      if (business_types !== undefined) patch.business_types = business_types;
+      if (business_website !== undefined) patch.business_website = business_website;
+      if (uses_microgreens !== undefined) patch.uses_microgreens = !!uses_microgreens;
+      if (language !== undefined) patch.language = language;
       await fetchFromSupabase(`/locations?id=eq.${encodeURIComponent(locId)}`, {
         method: 'PATCH',
         body: JSON.stringify(patch),
