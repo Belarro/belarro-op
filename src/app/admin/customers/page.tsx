@@ -465,8 +465,8 @@ export default function CustomersPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
-                <div className="col-span-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="sm:col-span-2">
                   <label className="block text-xs font-semibold text-gray-600 mb-1">Contact Person Name</label>
                   <input
                     type="text"

@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
@@ -64,6 +64,10 @@ const sections = [
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const [open, setOpen] = useState(false);
+
+  // Close the drawer on route change (mobile).
+  useEffect(() => { setOpen(false); }, [pathname]);
 
   async function handleLogout() {
     const supabase = createSupabaseBrowserClient();
@@ -72,11 +76,11 @@ export default function Sidebar() {
     router.replace('/login');
   }
 
-  return (
-    <aside className="w-64 bg-white border-r border-gray-200 flex flex-col h-screen sticky top-0">
+  const content = (
+    <>
       {/* Brand logo */}
       <div className="p-6 border-b border-gray-200 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-green-600 flex items-center justify-center text-white font-bold text-lg">
+        <div className="w-8 h-8 rounded-lg bg-green-600 flex items-center justify-center text-white font-bold text-lg shrink-0">
           B
         </div>
         <div>
@@ -97,10 +101,10 @@ export default function Sidebar() {
             {section.items.map((item) => {
               const IconComponent = item.icon;
               // Strict match for dashboard, prefix match for others to keep active state
-              const isActive = item.href === '/admin' 
-                ? pathname === '/admin' 
+              const isActive = item.href === '/admin'
+                ? pathname === '/admin'
                 : pathname.startsWith(item.href);
-              
+
               return (
                 <Link
                   key={item.href}
@@ -111,10 +115,10 @@ export default function Sidebar() {
                       : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                   }`}
                 >
-                  <IconComponent 
-                    className={`w-5 h-5 transition-colors ${
+                  <IconComponent
+                    className={`w-5 h-5 transition-colors shrink-0 ${
                       isActive ? 'text-green-600' : 'text-gray-400 group-hover:text-gray-600'
-                    }`} 
+                    }`}
                   />
                   <span className="text-sm">{item.label}</span>
                 </Link>
@@ -134,6 +138,43 @@ export default function Sidebar() {
         </button>
         <p className="text-[11px] text-gray-400 font-medium text-center">Belarro V4 Admin</p>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile top bar: hamburger + brand, shown below lg only */}
+      <div className="lg:hidden sticky top-0 z-30 flex items-center gap-3 bg-white border-b border-gray-200 px-4 py-3">
+        <button
+          onClick={() => setOpen(true)}
+          aria-label="Open menu"
+          className="p-2 -ml-2 rounded-lg text-gray-600 hover:bg-gray-100"
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
+        <div className="w-7 h-7 rounded-lg bg-green-600 flex items-center justify-center text-white font-bold text-sm shrink-0">B</div>
+        <span className="font-bold text-gray-900">Belarro</span>
+      </div>
+
+      {/* Mobile drawer overlay */}
+      {open && (
+        <div
+          className="lg:hidden fixed inset-0 bg-black/40 z-40"
+          onClick={() => setOpen(false)}
+        />
+      )}
+
+      {/* Desktop: static sidebar. Mobile: slide-in drawer. */}
+      <aside
+        className={`bg-white border-r border-gray-200 flex flex-col z-50
+          fixed inset-y-0 left-0 w-72 transform transition-transform duration-200 ease-out
+          ${open ? 'translate-x-0' : '-translate-x-full'}
+          lg:static lg:translate-x-0 lg:w-64 lg:h-screen lg:sticky lg:top-0`}
+      >
+        {content}
+      </aside>
+    </>
   );
 }

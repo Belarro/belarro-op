@@ -576,7 +576,8 @@ export default function ProductionPage() {
                 </div>
               ) : opsLayout === 'calendar' ? (
                 /* Calendar grid: weeks as rows, Mon-Sun columns */
-                <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
+                  <div className="min-w-[640px]">
                   <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50">
                     {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
                       <div key={d} className="px-2 py-2 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">{d}</div>
@@ -629,6 +630,7 @@ export default function ProductionPage() {
                       })}
                     </div>
                   ))}
+                  </div>
                 </div>
               ) : (
                 /* Week/2-week/4-week view - condensed list */

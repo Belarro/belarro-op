@@ -303,6 +303,7 @@ export default function OrdersPage() {
                   </button>
                 </div>
               </div>
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-xs uppercase text-gray-400 font-semibold border-b border-gray-100">
@@ -328,6 +329,7 @@ export default function OrdersPage() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
           );})}
         </div>

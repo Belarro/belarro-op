@@ -22,3 +22,6 @@ dist/
 *.log
 coverage/
 tsconfig.tsbuildinfo
+
+.vercel
+.env*

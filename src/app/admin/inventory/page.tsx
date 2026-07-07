@@ -301,6 +301,7 @@ export default function InventoryPage() {
           
           {/* SEEDS TABLE */}
           {activeTab === 'seeds' && (
+            <div className="overflow-x-auto">
             <table className="w-full text-sm text-left border-collapse">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100 text-xs uppercase text-gray-500 font-semibold">
@@ -388,10 +389,12 @@ export default function InventoryPage() {
                 })}
               </tbody>
             </table>
+            </div>
           )}
 
           {/* PACKAGES TABLE */}
           {activeTab === 'packages' && (
+            <div className="overflow-x-auto">
             <table className="w-full text-sm text-left border-collapse">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100 text-xs uppercase text-gray-500 font-semibold">
@@ -456,10 +459,12 @@ export default function InventoryPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
 
           {/* SAMPLES TABLE */}
           {activeTab === 'samples' && (
+            <div className="overflow-x-auto">
             <table className="w-full text-sm text-left border-collapse">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100 text-xs uppercase text-gray-500 font-semibold">
@@ -513,6 +518,7 @@ export default function InventoryPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
 
         </div>
