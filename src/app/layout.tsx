@@ -22,6 +22,7 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const mapsKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   return (
     <html lang="en">
       <body>
@@ -31,6 +32,19 @@ export default function RootLayout({
             __html: `if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {})); }`,
           }}
         />
+        {mapsKey && (
+          <>
+            <script
+              dangerouslySetInnerHTML={{
+                __html: `window.initGoogleMaps = function() { window.dispatchEvent(new Event('google-maps-loaded')); };`,
+              }}
+            />
+            <script
+              src={`https://maps.googleapis.com/maps/api/js?key=${mapsKey}&libraries=places,marker&loading=async&callback=initGoogleMaps`}
+              async
+            />
+          </>
+        )}
       </body>
     </html>
   );
