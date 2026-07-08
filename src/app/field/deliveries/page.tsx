@@ -4,6 +4,10 @@
 // Same-origin now: no sync secret, no CORS, just the session cookie.
 // Confirming writes to belarro_v4_delivery (the ledger invoices read for
 // past dates); "Not delivered" removes the line from billing.
+//
+// Source of truth: only orders active on the admin Orders page appear here
+// — no grace-period/draining for removed orders (Ron: "the main orders will
+// be the web part, make sure it shows exactly how it needs to be").
 
 import React, { useCallback, useEffect, useState } from 'react';
 
@@ -12,7 +16,6 @@ interface DueItem {
   crop_name: string;
   size_name: string;
   expected_qty: number;
-  is_ending: boolean;
   status: 'pending' | 'delivered' | 'adjusted' | 'not_delivered';
   actual_qty: number;
 }
@@ -55,6 +58,15 @@ function weeksAway(from: string, to: string) {
   return Math.round((new Date(`${to}T00:00:00`).getTime() - new Date(`${from}T00:00:00`).getTime()) / (7 * 86400000));
 }
 
+async function confirmOne(orderId: string, date: string, status: string, actualQty: number) {
+  const res = await fetch('/api/deliveries/confirm', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ order_id: orderId, delivery_date: date, status, actual_qty: actualQty }),
+  });
+  return res.json();
+}
+
 function DeliveryLine({ item, date, onDone }: { item: DueItem; date: string; onDone: () => void }) {
   const [busy, setBusy] = useState(false);
   const [adjusting, setAdjusting] = useState(false);
@@ -63,12 +75,7 @@ function DeliveryLine({ item, date, onDone }: { item: DueItem; date: string; onD
   const confirm = async (status: string, actualQty: number) => {
     setBusy(true);
     try {
-      const res = await fetch('/api/deliveries/confirm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ order_id: item.order_id, delivery_date: date, status, actual_qty: actualQty }),
-      });
-      const json = await res.json();
+      const json = await confirmOne(item.order_id, date, status, actualQty);
       if (!json.success) alert(json.error || 'Failed');
       onDone();
     } finally {
@@ -83,11 +90,12 @@ function DeliveryLine({ item, date, onDone }: { item: DueItem; date: string; onD
         <div className="min-w-0">
           <div className="font-semibold text-sm text-gray-900">
             {item.crop_name}{item.size_name ? <span className="text-gray-400 font-normal"> ({item.size_name})</span> : null}
-            {item.is_ending && <span className="ml-1.5 text-[10px] font-bold text-amber-600">ENDING</span>}
           </div>
-          <div className="text-xs text-gray-400">
-            Expected {item.expected_qty}
-            {item.status !== 'pending' && item.actual_qty !== item.expected_qty && ` · Actual ${item.actual_qty}`}
+          <div className="text-lg font-extrabold text-gray-900 mt-0.5">
+            {item.expected_qty}×
+            {item.status !== 'pending' && item.actual_qty !== item.expected_qty && (
+              <span className="text-sm font-semibold text-blue-600 ml-1.5">Actual {item.actual_qty}</span>
+            )}
           </div>
         </div>
         <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${STATUS_BADGE[item.status]}`}>
@@ -124,6 +132,49 @@ function DeliveryLine({ item, date, onDone }: { item: DueItem; date: string; onD
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+function CustomerCard({ customer, date, onDone }: { customer: DueCustomer; date: string; onDone: () => void }) {
+  const [markingAll, setMarkingAll] = useState(false);
+  const allDone = customer.items.every(i => i.status !== 'pending');
+  const pendingCount = customer.items.filter(i => i.status === 'pending').length;
+
+  const markAllDelivered = async () => {
+    setMarkingAll(true);
+    try {
+      const pending = customer.items.filter(i => i.status === 'pending');
+      await Promise.all(pending.map(i => confirmOne(i.order_id, date, 'delivered', i.expected_qty)));
+      onDone();
+    } finally {
+      setMarkingAll(false);
+    }
+  };
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+      <div className={`px-4 py-3 flex items-center justify-between gap-2 ${allDone ? 'bg-green-50' : ''}`}>
+        <div className="min-w-0">
+          {/* Restaurant name — 50% bigger than the old text-sm, per Ron's request */}
+          <div className="font-extrabold text-gray-900 text-lg leading-tight truncate">{customer.customer_name}</div>
+          {customer.address && <div className="text-xs text-gray-400">{customer.address}</div>}
+        </div>
+        {allDone ? (
+          <span className="text-2xl shrink-0">✅</span>
+        ) : pendingCount > 1 ? (
+          <button
+            onClick={markAllDelivered}
+            disabled={markingAll}
+            className="shrink-0 bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-2 rounded-lg disabled:opacity-50 whitespace-nowrap"
+          >
+            {markingAll ? '…' : `✓ Mark all delivered (${pendingCount})`}
+          </button>
+        ) : null}
+      </div>
+      {customer.items.map(item => (
+        <DeliveryLine key={item.order_id} item={item} date={date} onDone={onDone} />
+      ))}
     </div>
   );
 }
@@ -184,23 +235,9 @@ export default function FieldDeliveriesPage() {
         <>
           {customers.length === 0 ? (
             <div className="text-center py-8 text-gray-400 text-sm">No deliveries due this day.</div>
-          ) : customers.map(c => {
-            const allDone = c.items.every(i => i.status !== 'pending');
-            return (
-              <div key={c.customer_id} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                <div className={`px-4 py-3 flex items-center justify-between ${allDone ? 'bg-green-50' : ''}`}>
-                  <div>
-                    <div className="font-bold text-gray-900 text-sm">{c.customer_name}</div>
-                    {c.address && <div className="text-xs text-gray-400">{c.address}</div>}
-                  </div>
-                  {allDone && <span>✅</span>}
-                </div>
-                {c.items.map(item => (
-                  <DeliveryLine key={item.order_id} item={item} date={date} onDone={() => load(date)} />
-                ))}
-              </div>
-            );
-          })}
+          ) : customers.map(c => (
+            <CustomerCard key={c.customer_id} customer={c} date={date} onDone={() => load(date)} />
+          ))}
 
           {upcoming.length > 0 && (
             <div>

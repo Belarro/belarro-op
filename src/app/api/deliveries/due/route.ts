@@ -4,7 +4,6 @@ import {
   addDays,
   deliversOnTuesday,
   effectiveGrowDays,
-  lastDeliveryAfterStop,
   localMidnight,
   nextTuesdayOnOrAfter,
   ymd,
@@ -69,11 +68,14 @@ export async function GET(request: NextRequest) {
     const today = localMidnight(new Date());
     const targetDate = dateParam ? localMidnight(new Date(`${dateParam}T00:00:00`)) : nextTuesdayOnOrAfter(today);
     const targetKey = ymd(targetDate);
-    const drainCutoff = addDays(targetDate, -45);
 
-    const [activeOrders, drainingOrders, variants, crops, procedures, customers, mixComponents, confirmed] = await Promise.all([
+    // Orders admin page is the single source of truth: only orders that are
+    // currently active there may appear here. No "draining"/grace-period
+    // logic for removed orders — if it's not active on Orders, it's not
+    // shown on Deliveries, period (Ron: "the main orders will be the web
+    // part... make sure it shows exactly how it needs to be").
+    const [activeOrders, variants, crops, procedures, customers, mixComponents, confirmed] = await Promise.all([
       fetchFromSupabase('/belarro_v4_order?status=in.(active,pending_seed,growing)&deleted_at=is.null&select=*'),
-      fetchFromSupabase(`/belarro_v4_order?deleted_at=gte.${ymd(drainCutoff)}&select=*`),
       fetchFromSupabase('/belarro_v4_product_variant?select=*'),
       fetchFromSupabase('/belarro_v4_crop?select=*'),
       fetchFromSupabase('/belarro_v4_growth_procedure?select=crop_id,stack_days,blackout_days,light_days'),
@@ -110,9 +112,8 @@ export async function GET(request: NextRequest) {
     };
 
     const lines = (activeOrders || []).filter((o: any) => custMap.get(o.customer_id)?.name);
-    const drainLines = (drainingOrders || []).filter((o: any) => o.deleted_at && custMap.get(o.customer_id)?.name);
 
-    const buildLine = (order: any, allLines: any[], ending: boolean) => {
+    const buildLine = (order: any) => {
       const variant = varMap.get(order.product_variant_id);
       const crop = variant ? cropMap.get(variant.crop_id) : null;
       const qty = order.quantity || 1;
@@ -124,7 +125,6 @@ export async function GET(request: NextRequest) {
         size_name: variant?.size_name || '',
         expected_qty: qty,
         unit_price_eur: priceEur,
-        is_ending: ending,
         status: confirmedRow ? confirmedRow.status : 'pending',
         actual_qty: confirmedRow ? confirmedRow.actual_qty : qty,
         note: confirmedRow?.note || null,
@@ -147,29 +147,7 @@ export async function GET(request: NextRequest) {
           items: [],
         });
       }
-      byCustomer.get(line.customer_id)!.items.push(buildLine(line, lines, false));
-    }
-
-    for (const line of drainLines) {
-      const variant = varMap.get(line.product_variant_id);
-      const crop = variant ? cropMap.get(variant.crop_id) : null;
-      const growDays = effectiveGrowDays(crop, procMap, mixComponentsMap);
-      if (growDays === 0) continue;
-      const drainEnd = lastDeliveryAfterStop(new Date(line.deleted_at), growDays);
-      if (targetDate.getTime() > drainEnd.getTime()) continue;
-      const firstDelivery = firstDeliveryOf(line, drainLines);
-      if (!deliversOnTuesday(targetDate, firstDelivery, line.frequency)) continue;
-      const customer = custMap.get(line.customer_id);
-      if (!byCustomer.has(line.customer_id)) {
-        byCustomer.set(line.customer_id, {
-          customer_id: line.customer_id,
-          customer_name: customer.restaurant_name || customer.name,
-          address: customer.address || null,
-          phone: customer.phone || null,
-          items: [],
-        });
-      }
-      byCustomer.get(line.customer_id)!.items.push(buildLine(line, drainLines, true));
+      byCustomer.get(line.customer_id)!.items.push(buildLine(line));
     }
 
     const result = Array.from(byCustomer.values()).sort((a, b) => a.customer_name.localeCompare(b.customer_name));
