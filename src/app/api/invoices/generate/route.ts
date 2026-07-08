@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchFromSupabase } from '@/lib/supabase';
-import { deliversOnTuesday, localMidnight, nextTuesdayOnOrAfter, ymd } from '@/lib/seeding';
+import { ymd } from '@/lib/seeding';
 
 // All Tuesdays in a given YYYY-MM
 function tuesdaysInMonth(year: number, month: number): Date[] {
@@ -15,20 +15,18 @@ function tuesdaysInMonth(year: number, month: number): Date[] {
 }
 
 /**
- * Invoices are split at "today":
+ * This is Ron's reconciliation copy — the thing he checks against before
+ * billing on his other system — so it only ever shows what has ACTUALLY
+ * been confirmed in belarro_v4_delivery. No predictions, no "expected this
+ * week." A Tuesday that hasn't been confirmed yet (still Pending, or the
+ * whole week hasn't happened) simply doesn't appear, same as one marked
+ * 'not_delivered'. If the count looks low, that means something is still
+ * waiting to be confirmed in Delivery > History, not that the math is off —
+ * see /api/deliveries/due for what's still outstanding.
  *
- * - Tuesdays <= today read belarro_v4_delivery — the immutable ledger written
- *   when a delivery is confirmed in Sales Tracker. Only rows that actually
- *   exist there appear; a line the customer hasn't received yet (because the
- *   order was just placed/edited) shows nothing, and 'not_delivered' rows are
- *   excluded from billing. Editing an order today can NEVER change what an
- *   already-confirmed past Tuesday billed, because that Tuesday's rows are
- *   already in the ledger and this code doesn't touch them.
- *
- * - Tuesdays > today have no delivery yet by definition, so they're a
- *   forward-looking PREDICTION built from the current live order config
- *   (same math as /api/production). Each such line is flagged `predicted:
- *   true` so the UI can mark it clearly as not-yet-real.
+ * Editing an order today can never change what an already-confirmed past
+ * Tuesday billed, because that Tuesday's rows are already in the ledger and
+ * this code only ever reads them, never recomputes them.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -42,50 +40,35 @@ export async function GET(request: NextRequest) {
 
     const [year, mon] = month.split('-').map(Number);
     const tuesdays = tuesdaysInMonth(year, mon);
-    const today = localMidnight(new Date());
-    const pastTuesdays = tuesdays.filter(t => t.getTime() <= today.getTime());
-    const futureTuesdays = tuesdays.filter(t => t.getTime() > today.getTime());
 
-    const [orders, variants, crops, customers, deliveries] = await Promise.all([
-      fetchFromSupabase('/belarro_v4_order?deleted_at=is.null&select=*').catch((e: any) => { throw new Error('orders: ' + e.message); }),
-      fetchFromSupabase('/belarro_v4_product_variant?select=*').catch((e: any) => { throw new Error('variants: ' + e.message); }),
-      fetchFromSupabase('/belarro_v4_crop?select=id,name_en&deleted_at=is.null').catch((e: any) => { throw new Error('crops: ' + e.message); }),
+    const [customers, deliveries] = await Promise.all([
       fetchFromSupabase('/belarro_v4_customer?select=id,name,restaurant_name,email,address').catch((e: any) => { throw new Error('customers: ' + e.message); }),
-      pastTuesdays.length > 0
+      tuesdays.length > 0
         ? fetchFromSupabase(
-            `/belarro_v4_delivery?delivery_date=gte.${ymd(pastTuesdays[0])}&delivery_date=lte.${ymd(pastTuesdays[pastTuesdays.length - 1])}&deleted_at=is.null&select=*`
+            `/belarro_v4_delivery?delivery_date=gte.${ymd(tuesdays[0])}&delivery_date=lte.${ymd(tuesdays[tuesdays.length - 1])}&deleted_at=is.null&select=*`
           ).catch((e: any) => { throw new Error('deliveries: ' + e.message); })
         : Promise.resolve([]),
     ]);
 
-    const varMap = new Map<string, any>((variants || []).map((v: any) => [v.id, v]));
-    const cropMap = new Map<string, any>((crops || []).map((c: any) => [c.id, c]));
     const custMap = new Map<string, any>((customers || []).map((c: any) => [c.id, c]));
 
-    // Group orders by customer (for the future/predicted portion)
-    const ordersByCustomer = new Map<string, any[]>();
-    for (const order of (orders || [])) {
-      if (!ordersByCustomer.has(order.customer_id)) ordersByCustomer.set(order.customer_id, []);
-      ordersByCustomer.get(order.customer_id)!.push(order);
-    }
-
-    // Group confirmed deliveries by customer (ground truth for the past)
+    // Group confirmed deliveries by customer — this is the only source for
+    // this page. A customer with no confirmed deliveries this month simply
+    // doesn't appear; there's nothing to reconcile yet.
     const deliveriesByCustomer = new Map<string, any[]>();
     for (const d of (deliveries || [])) {
       if (!deliveriesByCustomer.has(d.customer_id)) deliveriesByCustomer.set(d.customer_id, []);
       deliveriesByCustomer.get(d.customer_id)!.push(d);
     }
 
-    const customerIds = new Set<string>([...ordersByCustomer.keys(), ...deliveriesByCustomer.keys()]);
-
-    const invoices = Array.from(customerIds).map((customerId) => {
+    const invoices = Array.from(deliveriesByCustomer.keys()).map((customerId) => {
       const customer = custMap.get(customerId);
       if (!customer) return null;
       const customerName = customer.restaurant_name || customer.name || 'Unknown';
 
       const lines: any[] = [];
 
-      // Past: ground truth from the ledger. Skipped deliveries aren't billed.
+      // Ground truth from the ledger only. Skipped deliveries aren't billed.
       for (const d of (deliveriesByCustomer.get(customerId) || [])) {
         if (d.status === 'not_delivered') continue;
         const qty = d.actual_qty ?? d.expected_qty ?? 1;
@@ -103,38 +86,6 @@ export async function GET(request: NextRequest) {
           predicted: false,
           delivery_status: d.status,
         });
-      }
-
-      // Future: prediction from current live order config.
-      for (const order of (ordersByCustomer.get(customerId) || [])) {
-        const variant = varMap.get(order.product_variant_id);
-        const crop = variant ? cropMap.get(variant.crop_id) : null;
-        if (!variant || !crop) continue;
-
-        const unitPrice = variant.price_eur ?? 0;
-        const qty = order.quantity || 1;
-        const firstDelivery = order.next_delivery_date
-          ? nextTuesdayOnOrAfter(new Date(order.next_delivery_date))
-          : null;
-        if (!firstDelivery) continue;
-
-        for (const tuesday of futureTuesdays) {
-          if (!deliversOnTuesday(tuesday, firstDelivery, order.frequency)) continue;
-
-          lines.push({
-            id: `${order.id}-${ymd(tuesday)}`,
-            order_id: order.id,
-            delivery_date: ymd(tuesday),
-            crop_name: crop.name_en,
-            size_name: variant.size_name,
-            qty,
-            unit_price: unitPrice,
-            line_total: +(qty * unitPrice).toFixed(2),
-            removed: false,
-            qty_override: null as number | null,
-            predicted: true,
-          });
-        }
       }
 
       lines.sort((a, b) => a.delivery_date.localeCompare(b.delivery_date) || a.crop_name.localeCompare(b.crop_name));
@@ -161,9 +112,6 @@ export async function GET(request: NextRequest) {
       data: invoices,
       tuesdays: tuesdays.map(t => ymd(t)),
       _debug: {
-        order_count: (orders || []).length,
-        variant_count: (variants || []).length,
-        crop_count: (crops || []).length,
         customer_count: (customers || []).length,
         delivery_ledger_rows: (deliveries || []).length,
         invoices_generated: invoices.length,

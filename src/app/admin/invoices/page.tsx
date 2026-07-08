@@ -273,7 +273,7 @@ export default function InvoicesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Invoices</h1>
-          <p className="text-sm text-gray-500 mt-1">Auto-generated from active orders. Edit or add lines before printing.</p>
+          <p className="text-sm text-gray-500 mt-1">Only confirmed deliveries — nothing predicted. Edit or add lines before printing.</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -305,7 +305,7 @@ export default function InvoicesPage() {
         </div>
       ) : invoices.length === 0 ? (
         <div className="bg-white border border-gray-200 rounded-xl p-12 text-center text-gray-400 text-sm">
-          No active orders found for {fmtMonth(month)}.
+          No confirmed deliveries yet for {fmtMonth(month)}. Confirm deliveries in Production &gt; Delivery &gt; History to see them here.
         </div>
       ) : (
         <div className="space-y-4">
@@ -327,7 +327,7 @@ export default function InvoicesPage() {
                 >
                   <div className="flex items-center gap-4">
                     <span className="font-bold text-gray-900 text-base">{inv.customer_name}</span>
-                    <span className="text-xs text-gray-400">{activeCount} visits · {itemCount} items</span>
+                    <span className="text-xs text-gray-400">{activeCount} confirmed {activeCount === 1 ? 'week' : 'weeks'} · {itemCount} items</span>
                   </div>
                   <div className="flex items-center gap-6">
                     <div className="text-right">
@@ -391,9 +391,6 @@ export default function InvoicesPage() {
                                       {line.crop_name}
                                       {line.size_name && <span className="text-gray-400 text-xs ml-1">({line.size_name})</span>}
                                       {line.manual && <span className="ml-1 text-[10px] text-green-600 font-semibold">manual</span>}
-                                      {line.predicted && (
-                                        <span className="ml-1 text-[10px] text-amber-600 font-semibold" title="Not delivered yet — projected from the current order">predicted</span>
-                                      )}
                                       {line.delivery_status === 'adjusted' && (
                                         <span className="ml-1 text-[10px] text-blue-600 font-semibold" title="Actual quantity differed from the order">adjusted</span>
                                       )}
