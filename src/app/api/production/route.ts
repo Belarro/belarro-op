@@ -147,7 +147,7 @@ export async function GET(request: NextRequest) {
         for (const comp of componentsOf(line)) {
           if (seedDayFor(comp.growDays) !== slotDay) continue;
           const firstSeed = firstSeedFor(firstDelivery, comp.growDays);
-          if (!seedsAtSlot(slotDate, firstSeed, line.frequency)) continue;
+          if (!seedsAtSlot(slotDate, firstSeed, line.frequency, line.recurring)) continue;
           grams.set(comp.cropId, (grams.get(comp.cropId) || 0) + comp.grams);
         }
       }
@@ -222,7 +222,7 @@ export async function GET(request: NextRequest) {
         for (const line of lines) {
           if (line.customer_id !== customerId) continue;
           const firstDelivery = firstDeliveryOf(line, lines);
-          if (deliversOnTuesday(t, firstDelivery, line.frequency)) items.push(lineItem(line));
+          if (deliversOnTuesday(t, firstDelivery, line.frequency, line.recurring)) items.push(lineItem(line));
         }
 
         if (items.length > 0) {

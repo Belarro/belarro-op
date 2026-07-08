@@ -136,7 +136,7 @@ export async function GET(request: NextRequest) {
 
     for (const line of lines) {
       const firstDelivery = firstDeliveryOf(line, lines);
-      if (!deliversOnTuesday(targetDate, firstDelivery, line.frequency)) continue;
+      if (!deliversOnTuesday(targetDate, firstDelivery, line.frequency, line.recurring)) continue;
       const customer = custMap.get(line.customer_id);
       if (!byCustomer.has(line.customer_id)) {
         byCustomer.set(line.customer_id, {
@@ -176,7 +176,7 @@ export async function GET(request: NextRequest) {
         const candidate = addDays(targetDate, w * 7);
         for (const line of customerLines) {
           const firstDelivery = firstDeliveryOf(line, lines);
-          if (!deliversOnTuesday(candidate, firstDelivery, line.frequency)) continue;
+          if (!deliversOnTuesday(candidate, firstDelivery, line.frequency, line.recurring)) continue;
           if (!earliest || candidate.getTime() < earliest.getTime()) {
             earliest = candidate;
             cropsOnEarliest.clear();

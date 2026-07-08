@@ -156,6 +156,44 @@ export default function ProductionPage() {
     }
   };
 
+  // Add-extra: a one-off item for this delivery only, not a new standing
+  // order (see /api/deliveries/add-extra). Ron: "if I wanna add something
+  // that I gave extra... choose a crop, a size, and how many."
+  const [crops, setCrops] = useState<{ id: string; name_en: string; variants: { id: string; size_name: string; price_eur: number | null }[] }[]>([]);
+  const [addExtraFor, setAddExtraFor] = useState<{ customer_id: string; customer_name: string } | null>(null);
+  const [extraForm, setExtraForm] = useState({ product_variant_id: '', quantity: '1' });
+  const [savingExtra, setSavingExtra] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/crops').then(r => r.json()).then(j => { if (j.success) setCrops(j.data || []); });
+  }, []);
+
+  const allVariants = crops.flatMap(c => c.variants.map(v => ({ ...v, crop_name: c.name_en })));
+
+  const submitExtra = async () => {
+    if (!addExtraFor || !extraForm.product_variant_id || !extraForm.quantity) return;
+    setSavingExtra(true);
+    try {
+      const res = await fetch('/api/deliveries/add-extra', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_id: addExtraFor.customer_id,
+          product_variant_id: extraForm.product_variant_id,
+          quantity: Number(extraForm.quantity),
+          delivery_date: historyDate,
+        }),
+      });
+      const json = await res.json();
+      if (!json.success) { alert(json.error || 'Failed to add'); return; }
+      setAddExtraFor(null);
+      setExtraForm({ product_variant_id: '', quantity: '1' });
+      await fetchHistory(historyDate);
+    } finally {
+      setSavingExtra(false);
+    }
+  };
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -530,10 +568,15 @@ export default function ProductionPage() {
                       No deliveries recorded for this week.
                     </div>
                   ) : (
-                    historyData.map((delivery) => (
+                    historyData.map((delivery: any) => (
                       <div key={delivery.customer_name} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                        <div className="bg-gray-50 border-b border-gray-200 px-5 py-3">
+                        <div className="bg-gray-50 border-b border-gray-200 px-5 py-3 flex items-center justify-between">
                           <span className="font-bold text-gray-900">{delivery.customer_name}</span>
+                          <button
+                            onClick={() => setAddExtraFor({ customer_id: delivery.customer_id, customer_name: delivery.customer_name })}
+                            className="text-xs font-semibold text-green-700 hover:underline">
+                            + Add extra item
+                          </button>
                         </div>
                         <table className="w-full text-sm">
                           <thead>
@@ -919,6 +962,51 @@ export default function ProductionPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* Add Extra Item Modal — one-off item for a single delivery, not a
+          new standing order (see /api/deliveries/add-extra). */}
+      {addExtraFor && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm border border-gray-200">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Add Extra Item</h2>
+                <p className="text-sm text-gray-500">{addExtraFor.customer_name} — {new Date(`${historyDate}T00:00:00`).toLocaleDateString('en-DE', { day: 'numeric', month: 'short' })}</p>
+              </div>
+              <button onClick={() => setAddExtraFor(null)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">✕</button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Crop &amp; size</label>
+                <select value={extraForm.product_variant_id}
+                  onChange={e => setExtraForm({ ...extraForm, product_variant_id: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none">
+                  <option value="">Select a crop...</option>
+                  {allVariants.map(v => (
+                    <option key={v.id} value={v.id}>
+                      {v.crop_name} ({v.size_name}){v.price_eur ? ` — €${v.price_eur}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Quantity</label>
+                <input type="number" min="1" step="1" value={extraForm.quantity}
+                  onChange={e => setExtraForm({ ...extraForm, quantity: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none" />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button onClick={() => setAddExtraFor(null)}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 rounded-lg text-sm">Cancel</button>
+                <button onClick={submitExtra} disabled={savingExtra || !extraForm.product_variant_id}
+                  className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-semibold py-2 rounded-lg text-sm">
+                  {savingExtra ? 'Adding...' : 'Add & mark delivered'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Harvest Modal */}

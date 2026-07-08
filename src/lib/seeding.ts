@@ -82,17 +82,23 @@ export function firstSeedFor(firstDeliveryTuesday: Date, growDays: number): Date
 
 // Does this line seed at slot `slotDate` (a Tue/Fri matching the crop's bucket)?
 // firstSeed anchors the weekly/biweekly cadence.
-export function seedsAtSlot(slotDate: Date, firstSeed: Date, frequency: string | null | undefined): boolean {
+export function seedsAtSlot(slotDate: Date, firstSeed: Date, frequency: string | null | undefined, recurring?: boolean): boolean {
   const diffDays = Math.round((localMidnight(slotDate).getTime() - localMidnight(firstSeed).getTime()) / 86400000);
   if (diffDays < 0) return false;
+  if (recurring === false) return diffDays === 0;
   if (frequency === 'biweekly') return diffDays % 14 === 0;
   return diffDays % 7 === 0;
 }
 
 // Does this line deliver on Tuesday `t`? Anchored to its first delivery.
-export function deliversOnTuesday(t: Date, firstDelivery: Date, frequency: string | null | undefined): boolean {
+// recurring===false means exactly that one date, never repeating — used for
+// ad-hoc one-off extras added to a single week's delivery (frequency itself
+// is DB NOT NULL + CHECK'd to 'weekly'/'biweekly' only, so one-offs can't be
+// flagged via a new frequency value and use the recurring column instead).
+export function deliversOnTuesday(t: Date, firstDelivery: Date, frequency: string | null | undefined, recurring?: boolean): boolean {
   const diffDays = Math.round((localMidnight(t).getTime() - localMidnight(firstDelivery).getTime()) / 86400000);
   if (diffDays < 0) return false;
+  if (recurring === false) return diffDays === 0;
   if (frequency === 'biweekly') return diffDays % 14 === 0;
   return diffDays % 7 === 0;
 }
