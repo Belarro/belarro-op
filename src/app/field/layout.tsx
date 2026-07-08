@@ -52,19 +52,25 @@ export default function FieldLayout({ children }: { children: React.ReactNode })
     <div className="flex flex-col h-dvh bg-gray-50">
       <header className="flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200 shrink-0">
         <div className="flex items-center gap-2">
-          <span className="w-7 h-7 rounded-lg bg-green-600 text-white font-bold flex items-center justify-center text-sm">B</span>
-          <span className="font-bold text-gray-900">Belarro</span>
-        </div>
-        <div className="flex items-center gap-3">
           {/* Non-admin sessions get redirected straight back to /field by
-              middleware, so this link is always safe to show. */}
-          <Link href="/admin" className="text-xs text-green-600 font-semibold px-2 py-1">
+              middleware, so this button is always safe to show. Made into a
+              real bordered button (not a small text link) — Ron reported he
+              couldn't find a way back to the admin site from here. */}
+          <Link
+            href="/admin"
+            className="flex items-center gap-1.5 border border-gray-200 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 text-xs font-bold text-gray-700"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5" /><path d="m12 19-7-7 7-7" />
+            </svg>
             Admin
           </Link>
-          <button onClick={handleSignOut} className="text-xs text-gray-400 font-semibold px-2 py-1">
-            Sign out
-          </button>
+          <span className="w-7 h-7 rounded-lg bg-green-600 text-white font-bold flex items-center justify-center text-sm ml-1">B</span>
+          <span className="font-bold text-gray-900">Belarro</span>
         </div>
+        <button onClick={handleSignOut} className="text-xs text-gray-400 font-semibold px-2 py-1">
+          Sign out
+        </button>
       </header>
 
       <main className="flex-1 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>

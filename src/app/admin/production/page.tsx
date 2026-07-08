@@ -93,6 +93,43 @@ export default function ProductionPage() {
   const [harvestForm, setHarvestForm] = useState({ actual_yield_grams: '', notes: '' });
   const [submitting, setSubmitting] = useState(false);
 
+  // Delivery tab: "Upcoming" is the live forward-looking schedule (data.schedule,
+  // recomputed from current orders). "History" reads the actual confirmed
+  // delivery ledger (belarro_v4_delivery, via the same /api/deliveries/due
+  // endpoint the field app uses) so Ron can go back weeks/months and see
+  // exactly what was delivered — not a projection. Ron: "let's say we can go
+  // one month back, two months back, so if I need to check something."
+  const [deliveryMode, setDeliveryMode] = useState<'upcoming' | 'history'>('upcoming');
+  const [historyDate, setHistoryDate] = useState<string>(() => {
+    const d = new Date(); d.setHours(0, 0, 0, 0);
+    if (d.getDay() !== 2) while (d.getDay() !== 2) d.setDate(d.getDate() - 1);
+    return d.toLocaleDateString('sv');
+  });
+  const [historyData, setHistoryData] = useState<{ customer_name: string; items: any[] }[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  const fetchHistory = async (dateStr: string) => {
+    setHistoryLoading(true);
+    try {
+      const res = await fetch(`/api/deliveries/due?date=${dateStr}`);
+      const json = await res.json();
+      if (json.success) { setHistoryData(json.data || []); setHistoryDate(json.date || dateStr); }
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (deliveryMode === 'history') fetchHistory(historyDate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deliveryMode]);
+
+  const shiftHistoryWeek = (deltaWeeks: number) => {
+    const d = new Date(`${historyDate}T00:00:00`);
+    d.setDate(d.getDate() + deltaWeeks * 7);
+    fetchHistory(d.toLocaleDateString('sv'));
+  };
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -379,42 +416,130 @@ export default function ProductionPage() {
           {/* ── DELIVERY TAB ── */}
           {activeTab === 'delivery' && (
             <div className="space-y-4">
-              {deliveries.length === 0 ? (
-                <div className="bg-white border border-gray-200 rounded-xl p-12 text-center text-gray-400 text-sm">
-                  No upcoming deliveries.
+              {/* Upcoming (live projection) vs History (ledger — go back weeks/months) */}
+              <div className="flex items-center gap-2">
+                <div className="flex bg-gray-100 rounded-lg p-1">
+                  <button onClick={() => setDeliveryMode('upcoming')}
+                    className={`px-4 py-1.5 text-sm font-semibold rounded-md transition ${deliveryMode === 'upcoming' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                    Upcoming
+                  </button>
+                  <button onClick={() => setDeliveryMode('history')}
+                    className={`px-4 py-1.5 text-sm font-semibold rounded-md transition ${deliveryMode === 'history' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                    History
+                  </button>
                 </div>
-              ) : (
-                deliveries.map((delivery) => (
-                  <div key={delivery.harvest_date + delivery.customer_name} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                    <div className="bg-gray-50 border-b border-gray-200 px-5 py-3 flex items-center justify-between">
-                      <div>
-                        <span className="font-bold text-gray-900">{delivery.customer_name}</span>
-                        <span className="ml-3 text-sm text-gray-500">Delivery: {delivery.harvest_display}</span>
-                      </div>
-                      <span className="text-xs font-semibold text-gray-500 bg-white border border-gray-200 px-2 py-1 rounded-lg">
-                        {delivery.items.length} items
-                      </span>
-                    </div>
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-xs font-semibold text-gray-400 uppercase border-b border-gray-100">
-                          <th className="px-5 py-2 text-left">Variety</th>
-                          <th className="px-5 py-2 text-right">Qty</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50">
-                        {delivery.items.map((item: any, i: number) => (
-                          <tr key={i} className="hover:bg-gray-50">
-                            <td className="px-5 py-3 font-semibold text-gray-900">{item.crop_name}</td>
-                            <td className="px-5 py-3 text-right text-gray-700">
-                              {item.order_qty}× <span className="text-xs text-gray-500">{item.size_name || `${item.size_grams}g`}</span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+              </div>
+
+              {deliveryMode === 'upcoming' ? (
+                deliveries.length === 0 ? (
+                  <div className="bg-white border border-gray-200 rounded-xl p-12 text-center text-gray-400 text-sm">
+                    No upcoming deliveries.
                   </div>
-                ))
+                ) : (
+                  deliveries.map((delivery) => (
+                    <div key={delivery.harvest_date + delivery.customer_name} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                      <div className="bg-gray-50 border-b border-gray-200 px-5 py-3 flex items-center justify-between">
+                        <div>
+                          <span className="font-bold text-gray-900">{delivery.customer_name}</span>
+                          <span className="ml-3 text-sm text-gray-500">Delivery: {delivery.harvest_display}</span>
+                        </div>
+                        <span className="text-xs font-semibold text-gray-500 bg-white border border-gray-200 px-2 py-1 rounded-lg">
+                          {delivery.items.length} items
+                        </span>
+                      </div>
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-xs font-semibold text-gray-400 uppercase border-b border-gray-100">
+                            <th className="px-5 py-2 text-left">Variety</th>
+                            <th className="px-5 py-2 text-right">Qty</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                          {delivery.items.map((item: any, i: number) => (
+                            <tr key={i} className="hover:bg-gray-50">
+                              <td className="px-5 py-3 font-semibold text-gray-900">{item.crop_name}</td>
+                              <td className="px-5 py-3 text-right text-gray-700">
+                                {item.order_qty}× <span className="text-xs text-gray-500">{item.size_name || `${item.size_grams}g`}</span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ))
+                )
+              ) : (
+                <div className="space-y-4">
+                  {/* Week navigator: step back one Tuesday at a time, or jump
+                      1/4/8 weeks back (roughly 1 week / 1 month / 2 months). */}
+                  <div className="flex items-center justify-between bg-white border border-gray-200 rounded-xl px-4 py-3">
+                    <button onClick={() => shiftHistoryWeek(-1)}
+                      className="w-9 h-9 bg-gray-100 hover:bg-gray-200 rounded-lg font-bold text-gray-600">←</button>
+                    <div className="text-center">
+                      <div className="font-bold text-gray-900">
+                        {new Date(`${historyDate}T00:00:00`).toLocaleDateString('en-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                      </div>
+                      <div className="flex items-center gap-2 justify-center mt-1">
+                        <button onClick={() => shiftHistoryWeek(-4)} className="text-xs font-semibold text-green-700 hover:underline">−1 month</button>
+                        <span className="text-gray-300">·</span>
+                        <button onClick={() => shiftHistoryWeek(-8)} className="text-xs font-semibold text-green-700 hover:underline">−2 months</button>
+                        <span className="text-gray-300">·</span>
+                        <button onClick={() => {
+                          const d = new Date(); d.setHours(0, 0, 0, 0);
+                          while (d.getDay() !== 2) d.setDate(d.getDate() - 1);
+                          fetchHistory(d.toLocaleDateString('sv'));
+                        }} className="text-xs font-semibold text-gray-500 hover:underline">Today</button>
+                      </div>
+                    </div>
+                    <button onClick={() => shiftHistoryWeek(1)}
+                      className="w-9 h-9 bg-gray-100 hover:bg-gray-200 rounded-lg font-bold text-gray-600">→</button>
+                  </div>
+
+                  {historyLoading ? (
+                    <div className="flex items-center justify-center py-16">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600" />
+                    </div>
+                  ) : historyData.length === 0 ? (
+                    <div className="bg-white border border-gray-200 rounded-xl p-12 text-center text-gray-400 text-sm">
+                      No deliveries recorded for this week.
+                    </div>
+                  ) : (
+                    historyData.map((delivery) => (
+                      <div key={delivery.customer_name} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                        <div className="bg-gray-50 border-b border-gray-200 px-5 py-3">
+                          <span className="font-bold text-gray-900">{delivery.customer_name}</span>
+                        </div>
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-xs font-semibold text-gray-400 uppercase border-b border-gray-100">
+                              <th className="px-5 py-2 text-left">Variety</th>
+                              <th className="px-5 py-2 text-right">Expected</th>
+                              <th className="px-5 py-2 text-right">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-50">
+                            {delivery.items.map((item: any, i: number) => (
+                              <tr key={i} className="hover:bg-gray-50">
+                                <td className="px-5 py-3 font-semibold text-gray-900">{item.crop_name}</td>
+                                <td className="px-5 py-3 text-right text-gray-700">{item.expected_qty}×</td>
+                                <td className="px-5 py-3 text-right">
+                                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                                    item.status === 'delivered' ? 'bg-green-100 text-green-700'
+                                    : item.status === 'adjusted' ? 'bg-blue-100 text-blue-700'
+                                    : item.status === 'not_delivered' ? 'bg-red-100 text-red-600'
+                                    : 'bg-gray-100 text-gray-500'
+                                  }`}>
+                                    {item.status === 'delivered' ? 'Delivered' : item.status === 'adjusted' ? 'Adjusted' : item.status === 'not_delivered' ? 'Not delivered' : 'Pending'}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ))
+                  )}
+                </div>
               )}
             </div>
           )}
