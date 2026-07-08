@@ -54,7 +54,8 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { order_id, delivery_date, status, actual_qty, note, confirmed_by } = body;
+    let { status } = body;
+    const { order_id, delivery_date, actual_qty, note, confirmed_by } = body;
 
     if (!order_id || !delivery_date || !status) {
       return NextResponse.json(
@@ -65,6 +66,10 @@ export async function POST(request: NextRequest) {
     if (!['delivered', 'adjusted', 'not_delivered'].includes(status)) {
       return NextResponse.json({ success: false, error: 'Invalid status' }, { status: 400, headers });
     }
+    // An "adjusted" confirmation with actual_qty 0 is really "not delivered"
+    // — storing it as adjusted/0 renders as a confusing "Adjusted, Actual 0"
+    // badge on both the field app and admin website, which reads like a bug.
+    if (status === 'adjusted' && Number(actual_qty) === 0) status = 'not_delivered';
 
     const order = await fetchFromSupabase(`/belarro_v4_order?id=eq.${order_id}&select=*`);
     if (!order || order.length === 0) {
