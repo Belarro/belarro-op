@@ -43,9 +43,16 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 function ymdLocal(d: Date) { return d.toLocaleDateString('sv'); }
-function nextTuesday(from: Date) {
+// The Tuesday you actually want to land on when opening the app: if today
+// IS Tuesday, that's the delivery day itself — show it (not next week).
+// Otherwise show the most recent past Tuesday, since that's the delivery
+// you're most likely to still need to confirm. Ron: "what happened if I
+// wanna see what I delivered last week?" — landing on next week by default
+// buried that need one tap behind the ← arrow with no visual cue it existed.
+function mostRelevantTuesday(from: Date) {
   const d = new Date(from); d.setHours(0, 0, 0, 0);
-  while (d.getDay() !== 2) d.setDate(d.getDate() + 1);
+  if (d.getDay() === 2) return d;
+  while (d.getDay() !== 2) d.setDate(d.getDate() - 1);
   return d;
 }
 function fmtDate(ymd: string) {
@@ -56,6 +63,18 @@ function fmtShort(ymd: string) {
 }
 function weeksAway(from: string, to: string) {
   return Math.round((new Date(`${to}T00:00:00`).getTime() - new Date(`${from}T00:00:00`).getTime()) / (7 * 86400000));
+}
+// "This week" / "Last week" / "N weeks ago" / "In N weeks" label relative
+// to today's Tuesday, so it's unmistakable which delivery you're looking at.
+function weekLabel(dateYmd: string) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const thisTue = mostRelevantTuesday(today);
+  const w = weeksAway(ymdLocal(thisTue), dateYmd);
+  if (w === 0) return 'This week';
+  if (w === -1) return 'Last week';
+  if (w === 1) return 'Next week';
+  if (w < 0) return `${Math.abs(w)} weeks ago`;
+  return `In ${w} weeks`;
 }
 
 async function confirmOne(orderId: string, date: string, status: string, actualQty: number) {
@@ -84,6 +103,9 @@ function DeliveryLine({ item, date, onDone }: { item: DueItem; date: string; onD
     }
   };
 
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const isOverdue = item.status === 'pending' && new Date(`${date}T00:00:00`) < today;
+
   return (
     <div className="px-4 py-3 border-b border-gray-100 last:border-0">
       <div className="flex items-center justify-between gap-2">
@@ -98,8 +120,8 @@ function DeliveryLine({ item, date, onDone }: { item: DueItem; date: string; onD
             )}
           </div>
         </div>
-        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${STATUS_BADGE[item.status]}`}>
-          {STATUS_LABEL[item.status]}
+        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${isOverdue ? 'bg-red-100 text-red-700' : STATUS_BADGE[item.status]}`}>
+          {isOverdue ? 'Needs confirmation' : STATUS_LABEL[item.status]}
         </span>
       </div>
 
@@ -180,7 +202,7 @@ function CustomerCard({ customer, date, onDone }: { customer: DueCustomer; date:
 }
 
 export default function FieldDeliveriesPage() {
-  const [date, setDate] = useState(() => ymdLocal(nextTuesday(new Date())));
+  const [date, setDate] = useState(() => ymdLocal(mostRelevantTuesday(new Date())));
   const [customers, setCustomers] = useState<DueCustomer[]>([]);
   const [upcoming, setUpcoming] = useState<UpcomingCustomer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -219,13 +241,31 @@ export default function FieldDeliveriesPage() {
   return (
     <div className="p-4 pb-8 space-y-4">
       <div className="flex items-center justify-between">
-        <button onClick={() => shiftWeek(-1)} className="w-10 h-10 bg-white border border-gray-200 rounded-lg font-bold text-gray-500">←</button>
+        <button onClick={() => shiftWeek(-1)} className="w-10 h-10 bg-white border border-gray-200 rounded-lg font-bold text-gray-500">
+          ← <span className="sr-only">Previous week</span>
+        </button>
         <div className="text-center">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-green-600">{weekLabel(date)}</div>
           <div className="font-bold text-gray-900">{fmtDate(date)}</div>
           <div className="text-xs text-gray-400">{doneItems}/{totalItems} confirmed</div>
         </div>
         <button onClick={() => shiftWeek(1)} className="w-10 h-10 bg-white border border-gray-200 rounded-lg font-bold text-gray-500">→</button>
       </div>
+      {/* Quick jump back to last week — the exact question Ron asked
+          ("what happened if I wanna see what I delivered last week?") —
+          a direct one-tap button instead of only the small ← arrow. */}
+      {weekLabel(date) !== 'Last week' && (
+        <button
+          onClick={() => {
+            const lastWeek = new Date(mostRelevantTuesday(new Date()));
+            lastWeek.setDate(lastWeek.getDate() - 7);
+            load(ymdLocal(lastWeek));
+          }}
+          className="w-full text-center text-xs font-semibold text-gray-500 -mt-2 py-1"
+        >
+          ← Jump to last week's deliveries
+        </button>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-16"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600" /></div>
