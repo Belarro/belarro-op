@@ -101,7 +101,11 @@ function fmtHistoryDate(iso: string) {
 
 export default function VisitForm({ loc, onClose, onSaved }: { loc: VisitFormLoc | null; onClose: () => void; onSaved: () => void }) {
   const isNew = !loc?.id;
-  const initialPhone = splitPhone(loc?.direct_phone || loc?.business_phone);
+  // Mobile field must start blank for a new place — Ron wants to type the
+  // contact's actual mobile number, not have the restaurant's Google-listed
+  // business/landline number auto-fill it. Only an existing location's own
+  // saved direct_phone (their real mobile) pre-fills the field.
+  const initialPhone = splitPhone(loc?.direct_phone || '');
 
   const [form, setForm] = useState({
     location_name: loc?.location_name || '',
@@ -111,7 +115,7 @@ export default function VisitForm({ loc, onClose, onSaved }: { loc: VisitFormLoc
     email: loc?.direct_email || loc?.business_email || '',
     business_types: loc?.business_types || '',
     business_website: loc?.business_website || '',
-    interest_level: loc?.interest_level || '',
+    interest_level: loc?.interest_level || 'Follow Up',
     notes: '',
     sample_given: 'NO' as 'YES' | 'NO',
     uses_microgreens: !!loc?.uses_microgreens,

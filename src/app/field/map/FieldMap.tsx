@@ -283,33 +283,68 @@ export default function FieldMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locations, onSelect, createUserLocationMarker]);
 
-  // Init: get GPS fix (or fall back to Berlin), then create the map once.
+  // Init: show the map immediately (cached/low-accuracy fix, or Berlin as a
+  // last resort), then silently refine the center once a high-accuracy GPS
+  // fix comes in. Previously this blocked map creation on the FIRST
+  // high-accuracy watchPosition callback, which can take several seconds
+  // to cold-lock on a real phone — the map now appears right away instead
+  // of showing a spinner while GPS locks.
   useEffect(() => {
     let mounted = true;
+    let watchId: number | null = null;
+    let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+
     const start = () => {
       if (!mounted) return;
       if (!navigator.geolocation) { createMap({ lat: 52.520008, lng: 13.404954 }); return; }
+
       let mapCreated = false;
-      const watchId = navigator.geolocation.watchPosition(
+      const showMapFast = (loc: { lat: number; lng: number }) => {
+        if (mapCreated || !mounted) return;
+        createMap(loc);
+        mapCreated = true;
+      };
+
+      // Fast path: accept a cached/low-accuracy fix (or timeout to Berlin)
+      // so the map renders within ~1s instead of waiting on a cold GPS lock.
+      navigator.geolocation.getCurrentPosition(
+        (pos) => showMapFast({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => showMapFast({ lat: 52.520008, lng: 13.404954 }),
+        { enableHighAccuracy: false, timeout: 3000, maximumAge: 60000 }
+      );
+      // Belt-and-suspenders: if even the fast path hasn't resolved yet.
+      fallbackTimer = setTimeout(() => showMapFast({ lat: 52.520008, lng: 13.404954 }), 3500);
+
+      // Refine path: high-accuracy watch, silently recenters once locked.
+      watchId = navigator.geolocation.watchPosition(
         (pos) => {
           const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          if (!mapCreated) { createMap(loc); mapCreated = true; }
-          else if (mapInstanceRef.current) mapInstanceRef.current.setCenter(loc);
-          if (pos.coords.accuracy <= 50) navigator.geolocation.clearWatch(watchId);
+          showMapFast(loc);
+          if (mapInstanceRef.current) mapInstanceRef.current.setCenter(loc);
+          if (pos.coords.accuracy <= 50 && watchId !== null) navigator.geolocation.clearWatch(watchId);
         },
-        () => { if (!mapCreated) { createMap({ lat: 52.520008, lng: 13.404954 }); mapCreated = true; } },
+        () => {},
         { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
       );
     };
 
+    let loadedHandler: (() => void) | null = null;
+    let loadTimer: ReturnType<typeof setTimeout> | null = null;
+
     if (window.google?.maps) start();
     else {
-      const handler = () => start();
-      window.addEventListener('google-maps-loaded', handler, { once: true });
-      const t = setTimeout(() => { if (window.google?.maps) start(); }, 200);
-      return () => { mounted = false; clearTimeout(t); window.removeEventListener('google-maps-loaded', handler); };
+      loadedHandler = () => start();
+      window.addEventListener('google-maps-loaded', loadedHandler, { once: true });
+      loadTimer = setTimeout(() => { if (window.google?.maps) start(); }, 200);
     }
-    return () => { mounted = false; };
+
+    return () => {
+      mounted = false;
+      if (fallbackTimer) clearTimeout(fallbackTimer);
+      if (loadTimer) clearTimeout(loadTimer);
+      if (loadedHandler) window.removeEventListener('google-maps-loaded', loadedHandler);
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
