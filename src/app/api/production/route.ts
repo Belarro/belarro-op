@@ -10,7 +10,6 @@ import {
   firstSeedFor,
   fmt,
   growDaysFromProc,
-  lastDeliveryAfterStop,
   localMidnight,
   nextDayOnOrAfter,
   nextTuesdayOnOrAfter,
@@ -40,15 +39,17 @@ export async function GET(request: NextRequest) {
     // auth handled by middleware
 
     const today = localMidnight(new Date());
-    const drainCutoff = addDays(today, -45); // longest crop 28d + buffer
 
-    const [activeOrders, drainingOrders, variants, crops, procedures, customers, batches, harvests, mixComponents] = await Promise.all([
+    // Orders admin page is the single source of truth: only orders that are
+    // currently active there may appear here. No "draining"/grace-period
+    // logic for removed orders — if it's not active on Orders, it's not
+    // shown on Production, period.
+    const [activeOrders, variants, crops, procedures, customers, batches, harvests, mixComponents] = await Promise.all([
       fetchFromSupabase('/belarro_v4_order?status=in.(active,pending_seed,growing)&deleted_at=is.null&select=*'),
-      fetchFromSupabase(`/belarro_v4_order?deleted_at=gte.${ymd(drainCutoff)}&select=*`),
       fetchFromSupabase('/belarro_v4_product_variant?select=*'),
       fetchFromSupabase('/belarro_v4_crop?select=*'),
       fetchFromSupabase('/belarro_v4_growth_procedure?select=crop_id,stack_days,blackout_days,light_days'),
-      fetchFromSupabase('/belarro_v4_customer?select=id,name&deleted_at=is.null'),
+      fetchFromSupabase('/belarro_v4_customer?select=id,name,restaurant_name&deleted_at=is.null'),
       fetchFromSupabase('/belarro_v4_seeding_batch?select=*'),
       fetchFromSupabase('/belarro_v4_harvest_record?select=*'),
       fetchFromSupabase('/belarro_v4_crop_mix_component?select=*'),
@@ -124,7 +125,10 @@ export async function GET(request: NextRequest) {
       return [{ cropId: crop.id, grams: totalGrams, growDays }];
     };
 
-    const lines = (activeOrders || []).filter((o: any) => custMap.get(o.customer_id)?.name);
+    const lines = (activeOrders || []).filter((o: any) => {
+      const c = custMap.get(o.customer_id);
+      return c?.name || c?.restaurant_name;
+    });
 
     // ── SEED SLOTS: next 4 Tuesdays + next 4 Fridays ──────────────────
     const nextTuesday = nextTuesdayOnOrAfter(today);
@@ -185,16 +189,12 @@ export async function GET(request: NextRequest) {
     const bySlotDate = new Map<string, any[]>(seedSchedule.map(s => [s.date, s.items]));
     const flatSeedDay = (dateKey: string) => bySlotDate.get(dateKey) || [];
 
-    // ── DELIVERY SCHEDULE (per customer, incl. draining removed crops) ─
-    const drainLines = (drainingOrders || []).filter((o: any) =>
-      o.deleted_at && custMap.get(o.customer_id)?.name
-    );
-
+    // ── DELIVERY SCHEDULE (per customer) ────────────────────────────────
     const customerDeliveryMap = new Map<string, { harvest_date: string; harvest_display: string; customer_name: string; items: any[] }>();
     const upcomingTuesdays: Date[] = [];
     for (let w = 0; w < 6; w++) upcomingTuesdays.push(addDays(nextTuesday, w * 7));
 
-    const lineItem = (line: any, ending: boolean) => {
+    const lineItem = (line: any) => {
       const variant = varMap.get(line.product_variant_id);
       const crop = variant ? cropMap.get(variant.crop_id) : null;
       const orderQty = line.quantity || 1;
@@ -207,18 +207,14 @@ export async function GET(request: NextRequest) {
         size_name: variant?.size_name || '',
         size_grams: sizeGrams,
         trays_needed: yieldPerTray && totalGrams > 0 ? Math.ceil(totalGrams / yieldPerTray) : orderQty,
-        is_ending: ending,
       };
     };
 
-    const customerIds = new Set<string>([
-      ...lines.map((l: any) => l.customer_id),
-      ...drainLines.map((l: any) => l.customer_id),
-    ]);
+    const customerIds = new Set<string>(lines.map((l: any) => l.customer_id));
 
     for (const customerId of customerIds) {
       const customer = custMap.get(customerId);
-      if (!customer?.name) continue;
+      if (!customer?.name && !customer?.restaurant_name) continue;
 
       for (const t of upcomingTuesdays) {
         const items: any[] = [];
@@ -226,28 +222,14 @@ export async function GET(request: NextRequest) {
         for (const line of lines) {
           if (line.customer_id !== customerId) continue;
           const firstDelivery = firstDeliveryOf(line, lines);
-          if (deliversOnTuesday(t, firstDelivery, line.frequency)) items.push(lineItem(line, false));
-        }
-
-        // Removed/swapped crops still in the ground keep delivering
-        // until their last seeded batch matures.
-        for (const line of drainLines) {
-          if (line.customer_id !== customerId) continue;
-          const variant = varMap.get(line.product_variant_id);
-          const crop = variant ? cropMap.get(variant.crop_id) : null;
-          const growDays = effectiveGrowDays(crop, procMap, mixComponentsMap);
-          if (growDays === 0) continue;
-          const drainEnd = lastDeliveryAfterStop(new Date(line.deleted_at), growDays);
-          if (t.getTime() > drainEnd.getTime()) continue;
-          const firstDelivery = firstDeliveryOf(line, drainLines);
-          if (deliversOnTuesday(t, firstDelivery, line.frequency)) items.push(lineItem(line, true));
+          if (deliversOnTuesday(t, firstDelivery, line.frequency)) items.push(lineItem(line));
         }
 
         if (items.length > 0) {
           customerDeliveryMap.set(customerId, {
             harvest_date: ymd(t),
             harvest_display: fmt(t),
-            customer_name: customer.name,
+            customer_name: customer.restaurant_name || customer.name,
             items,
           });
           break; // earliest delivering Tuesday found for this customer
