@@ -106,15 +106,21 @@ export async function POST(request: NextRequest) {
     };
 
     // Upsert on (order_id, delivery_date) — a correction replaces, never duplicates.
+    // Must include soft-deleted rows here too: the DB has a real unique
+    // constraint on (order_id, delivery_date) regardless of deleted_at, and
+    // hard deletes are blocked at the DB level, so a soft-deleted row's key
+    // is permanently occupied. Re-confirming has to find and revive it
+    // (clearing deleted_at) instead of trying to INSERT a new row, which
+    // would 409 on the unique constraint every time.
     const existing = await fetchFromSupabase(
-      `/belarro_v4_delivery?order_id=eq.${order_id}&delivery_date=eq.${delivery_date}&deleted_at=is.null&select=id`
+      `/belarro_v4_delivery?order_id=eq.${order_id}&delivery_date=eq.${delivery_date}&select=id`
     );
 
     let saved;
     if (existing && existing.length > 0) {
       saved = await fetchFromSupabase(`/belarro_v4_delivery?id=eq.${existing[0].id}`, {
         method: 'PATCH',
-        body: JSON.stringify(row),
+        body: JSON.stringify({ ...row, deleted_at: null }),
       });
     } else {
       const id = crypto.randomUUID();
