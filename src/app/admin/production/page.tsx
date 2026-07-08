@@ -570,38 +570,30 @@ export default function ProductionPage() {
                   ) : (
                     historyData.map((delivery: any) => (
                       <div key={delivery.customer_name} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                        <div className="bg-gray-50 border-b border-gray-200 px-5 py-3 flex items-center justify-between">
-                          <span className="font-bold text-gray-900">{delivery.customer_name}</span>
+                        <div className="bg-gray-50 border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+                          <span className="font-extrabold text-gray-900 text-xl">{delivery.customer_name}</span>
                           <button
                             onClick={() => setAddExtraFor({ customer_id: delivery.customer_id, customer_name: delivery.customer_name })}
-                            className="text-xs font-semibold text-green-700 hover:underline">
+                            className="text-sm font-bold text-green-700 hover:underline">
                             + Add extra item
                           </button>
                         </div>
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="text-xs font-semibold text-gray-400 uppercase border-b border-gray-100">
-                              <th className="px-5 py-2 text-left">Variety</th>
-                              <th className="px-5 py-2 text-right">Expected</th>
-                              <th className="px-5 py-2 text-right">Status</th>
-                              <th className="px-5 py-2 text-right">Action</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-50">
-                            {delivery.items.map((item: any, i: number) => {
-                              const isEditing = editingItem === item.order_id;
-                              const isSaving = savingItem === item.order_id;
-                              return (
-                                <tr key={i} className="hover:bg-gray-50">
-                                  <td className="px-5 py-3 font-semibold text-gray-900">{item.crop_name}</td>
-                                  <td className="px-5 py-3 text-right text-gray-700">
-                                    {item.expected_qty}×
+                        <div className="divide-y divide-gray-100">
+                          {delivery.items.map((item: any, i: number) => {
+                            const isEditing = editingItem === item.order_id;
+                            const isSaving = savingItem === item.order_id;
+                            return (
+                              <div key={i} className="px-6 py-4 flex items-center justify-between gap-4 flex-wrap">
+                                <div className="min-w-0">
+                                  <div className="font-bold text-gray-900 text-lg">{item.crop_name}</div>
+                                  <div className="flex items-center gap-3 mt-1">
+                                    <span className="text-2xl font-extrabold text-gray-900">
+                                      {item.expected_qty}×
+                                    </span>
                                     {item.status !== 'pending' && item.actual_qty != null && item.actual_qty !== item.expected_qty && (
-                                      <span className="block text-xs font-semibold text-blue-600">Actual {item.actual_qty}</span>
+                                      <span className="text-sm font-bold text-blue-600">Actual {item.actual_qty}</span>
                                     )}
-                                  </td>
-                                  <td className="px-5 py-3 text-right">
-                                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                                    <span className={`text-sm font-bold px-3 py-1 rounded-full ${
                                       item.status === 'delivered' ? 'bg-green-100 text-green-700'
                                       : item.status === 'adjusted' ? 'bg-blue-100 text-blue-700'
                                       : item.status === 'not_delivered' ? 'bg-red-100 text-red-600'
@@ -609,48 +601,47 @@ export default function ProductionPage() {
                                     }`}>
                                       {item.status === 'delivered' ? 'Delivered' : item.status === 'adjusted' ? 'Adjusted' : item.status === 'not_delivered' ? 'Not delivered' : 'Pending'}
                                     </span>
-                                  </td>
-                                  <td className="px-5 py-3 text-right">
-                                    {isEditing ? (
-                                      <div className="flex items-center justify-end gap-1.5">
-                                        <input type="number" min="0" autoFocus value={editQty}
-                                          onChange={e => setEditQty(e.target.value)}
-                                          className="w-14 border border-gray-200 rounded-lg px-1.5 py-1 text-sm text-center outline-none focus:ring-2 focus:ring-green-500" />
-                                        <button disabled={isSaving}
-                                          onClick={() => confirmDelivery(item.order_id, 'adjusted', Number(editQty))}
-                                          className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg disabled:opacity-50">
-                                          Save
-                                        </button>
-                                        <button onClick={() => setEditingItem(null)}
-                                          className="px-2 py-1 bg-gray-100 text-gray-600 text-xs font-semibold rounded-lg">
-                                          Cancel
-                                        </button>
-                                      </div>
-                                    ) : (
-                                      <div className="flex items-center justify-end gap-1.5">
-                                        <button disabled={isSaving}
-                                          onClick={() => confirmDelivery(item.order_id, 'delivered', item.expected_qty)}
-                                          className="px-2 py-1 bg-green-50 hover:bg-green-100 text-green-700 text-xs font-semibold rounded-lg disabled:opacity-50">
-                                          ✓ Delivered
-                                        </button>
-                                        <button disabled={isSaving}
-                                          onClick={() => { setEditQty(String(item.actual_qty ?? item.expected_qty)); setEditingItem(item.order_id); }}
-                                          className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg disabled:opacity-50">
-                                          Adjust
-                                        </button>
-                                        <button disabled={isSaving}
-                                          onClick={() => confirmDelivery(item.order_id, 'not_delivered', 0)}
-                                          className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold rounded-lg disabled:opacity-50">
-                                          ✕
-                                        </button>
-                                      </div>
-                                    )}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
+                                  </div>
+                                </div>
+
+                                {isEditing ? (
+                                  <div className="flex items-center gap-2">
+                                    <input type="number" min="0" autoFocus value={editQty}
+                                      onChange={e => setEditQty(e.target.value)}
+                                      className="w-20 border border-gray-200 rounded-lg px-2 py-2.5 text-lg font-bold text-center outline-none focus:ring-2 focus:ring-green-500" />
+                                    <button disabled={isSaving}
+                                      onClick={() => confirmDelivery(item.order_id, 'adjusted', Number(editQty))}
+                                      className="px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-lg disabled:opacity-50">
+                                      Save
+                                    </button>
+                                    <button onClick={() => setEditingItem(null)}
+                                      className="px-4 py-2.5 bg-gray-100 text-gray-600 text-sm font-bold rounded-lg">
+                                      Cancel
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    <button disabled={isSaving}
+                                      onClick={() => confirmDelivery(item.order_id, 'delivered', item.expected_qty)}
+                                      className="px-4 py-2.5 bg-green-50 hover:bg-green-100 text-green-700 text-sm font-bold rounded-lg disabled:opacity-50">
+                                      ✓ Delivered
+                                    </button>
+                                    <button disabled={isSaving}
+                                      onClick={() => { setEditQty(String(item.actual_qty ?? item.expected_qty)); setEditingItem(item.order_id); }}
+                                      className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-bold rounded-lg disabled:opacity-50">
+                                      Adjust
+                                    </button>
+                                    <button disabled={isSaving}
+                                      onClick={() => confirmDelivery(item.order_id, 'not_delivered', 0)}
+                                      className="px-4 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 text-sm font-bold rounded-lg disabled:opacity-50">
+                                      ✕
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     ))
                   )}
