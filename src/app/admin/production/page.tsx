@@ -130,6 +130,32 @@ export default function ProductionPage() {
     fetchHistory(d.toLocaleDateString('sv'));
   };
 
+  // Same ledger write the field app uses (belarro_v4_delivery) — lets Ron
+  // fix a delivery from the desktop too: mark delivered, adjust the actual
+  // qty (e.g. 3 ordered but 1 went bad, only 2 delivered), or mark not
+  // delivered. Ron: "I want to be able to edit the delivery, mark as
+  // delivered or change something if needed."
+  const [editingItem, setEditingItem] = useState<string | null>(null); // order_id currently in "adjust" mode
+  const [editQty, setEditQty] = useState('');
+  const [savingItem, setSavingItem] = useState<string | null>(null);
+
+  const confirmDelivery = async (orderId: string, status: string, actualQty: number) => {
+    setSavingItem(orderId);
+    try {
+      const res = await fetch('/api/deliveries/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_id: orderId, delivery_date: historyDate, status, actual_qty: actualQty }),
+      });
+      const json = await res.json();
+      if (!json.success) { alert(json.error || 'Failed to save'); return; }
+      setEditingItem(null);
+      await fetchHistory(historyDate);
+    } finally {
+      setSavingItem(null);
+    }
+  };
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -515,25 +541,71 @@ export default function ProductionPage() {
                               <th className="px-5 py-2 text-left">Variety</th>
                               <th className="px-5 py-2 text-right">Expected</th>
                               <th className="px-5 py-2 text-right">Status</th>
+                              <th className="px-5 py-2 text-right">Action</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-50">
-                            {delivery.items.map((item: any, i: number) => (
-                              <tr key={i} className="hover:bg-gray-50">
-                                <td className="px-5 py-3 font-semibold text-gray-900">{item.crop_name}</td>
-                                <td className="px-5 py-3 text-right text-gray-700">{item.expected_qty}×</td>
-                                <td className="px-5 py-3 text-right">
-                                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                                    item.status === 'delivered' ? 'bg-green-100 text-green-700'
-                                    : item.status === 'adjusted' ? 'bg-blue-100 text-blue-700'
-                                    : item.status === 'not_delivered' ? 'bg-red-100 text-red-600'
-                                    : 'bg-gray-100 text-gray-500'
-                                  }`}>
-                                    {item.status === 'delivered' ? 'Delivered' : item.status === 'adjusted' ? 'Adjusted' : item.status === 'not_delivered' ? 'Not delivered' : 'Pending'}
-                                  </span>
-                                </td>
-                              </tr>
-                            ))}
+                            {delivery.items.map((item: any, i: number) => {
+                              const isEditing = editingItem === item.order_id;
+                              const isSaving = savingItem === item.order_id;
+                              return (
+                                <tr key={i} className="hover:bg-gray-50">
+                                  <td className="px-5 py-3 font-semibold text-gray-900">{item.crop_name}</td>
+                                  <td className="px-5 py-3 text-right text-gray-700">
+                                    {item.expected_qty}×
+                                    {item.status !== 'pending' && item.actual_qty != null && item.actual_qty !== item.expected_qty && (
+                                      <span className="block text-xs font-semibold text-blue-600">Actual {item.actual_qty}</span>
+                                    )}
+                                  </td>
+                                  <td className="px-5 py-3 text-right">
+                                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                                      item.status === 'delivered' ? 'bg-green-100 text-green-700'
+                                      : item.status === 'adjusted' ? 'bg-blue-100 text-blue-700'
+                                      : item.status === 'not_delivered' ? 'bg-red-100 text-red-600'
+                                      : 'bg-gray-100 text-gray-500'
+                                    }`}>
+                                      {item.status === 'delivered' ? 'Delivered' : item.status === 'adjusted' ? 'Adjusted' : item.status === 'not_delivered' ? 'Not delivered' : 'Pending'}
+                                    </span>
+                                  </td>
+                                  <td className="px-5 py-3 text-right">
+                                    {isEditing ? (
+                                      <div className="flex items-center justify-end gap-1.5">
+                                        <input type="number" min="0" autoFocus value={editQty}
+                                          onChange={e => setEditQty(e.target.value)}
+                                          className="w-14 border border-gray-200 rounded-lg px-1.5 py-1 text-sm text-center outline-none focus:ring-2 focus:ring-green-500" />
+                                        <button disabled={isSaving}
+                                          onClick={() => confirmDelivery(item.order_id, 'adjusted', Number(editQty))}
+                                          className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg disabled:opacity-50">
+                                          Save
+                                        </button>
+                                        <button onClick={() => setEditingItem(null)}
+                                          className="px-2 py-1 bg-gray-100 text-gray-600 text-xs font-semibold rounded-lg">
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center justify-end gap-1.5">
+                                        <button disabled={isSaving}
+                                          onClick={() => confirmDelivery(item.order_id, 'delivered', item.expected_qty)}
+                                          className="px-2 py-1 bg-green-50 hover:bg-green-100 text-green-700 text-xs font-semibold rounded-lg disabled:opacity-50">
+                                          ✓ Delivered
+                                        </button>
+                                        <button disabled={isSaving}
+                                          onClick={() => { setEditQty(String(item.actual_qty ?? item.expected_qty)); setEditingItem(item.order_id); }}
+                                          className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg disabled:opacity-50">
+                                          Adjust
+                                        </button>
+                                        <button disabled={isSaving}
+                                          onClick={() => confirmDelivery(item.order_id, 'not_delivered', 0)}
+                                          className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold rounded-lg disabled:opacity-50">
+                                          ✕
+                                        </button>
+                                      </div>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
