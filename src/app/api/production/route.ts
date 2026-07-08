@@ -30,9 +30,8 @@ import {
  * repeats weekly (biweekly = every 2nd week). So during ramp-up, long crops
  * appear first and short crops join later — all ready on the same Tuesday.
  *
- * Deliveries: soft-deleted lines keep delivering until their last seeded batch
- * matures (pipeline drain), so removed/swapped crops still show up in the
- * delivery schedule until the handover.
+ * Deliveries: only orders currently active on the Orders admin page appear
+ * here — no grace-period/draining for removed orders.
  */
 export async function GET(request: NextRequest) {
   try {

@@ -1,7 +1,7 @@
 // Minimal service worker: makes the app installable and survives flaky
 // connections on the road with a network-first strategy for pages.
 // Data (API calls) is never cached — field confirmations must be live.
-const CACHE = 'belarro-op-v1';
+const CACHE = 'belarro-op-v2';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
