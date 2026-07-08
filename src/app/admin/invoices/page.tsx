@@ -38,6 +38,20 @@ interface CustomerInvoice {
   total: number;
 }
 
+// Invoice print builds a raw HTML string written via document.write, so any
+// customer/crop name containing HTML must be escaped here first — otherwise
+// a name like `<img src=x onerror=...>` executes in the logged-in admin's
+// browser the next time this invoice is printed.
+function escapeHtml(s: string | null | undefined): string {
+  if (!s) return '';
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function fmtDate(s: string) {
   return new Date(s + 'T00:00:00').toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' });
 }
@@ -178,7 +192,7 @@ export default function InvoicesPage() {
 <html>
 <head>
   <meta charset="utf-8"/>
-  <title>Invoice ${fmtMonth(inv.month)} — ${inv.customer_name}</title>
+  <title>Invoice ${fmtMonth(inv.month)} — ${escapeHtml(inv.customer_name)}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: Arial, sans-serif; font-size: 12px; color: #111; padding: 40px; }
@@ -205,9 +219,9 @@ export default function InvoicesPage() {
     </div>
     <div>
       <p class="label">Bill To</p>
-      <p><strong>${inv.customer_name}</strong></p>
-      ${inv.customer_address ? `<p>${inv.customer_address}</p>` : ''}
-      ${inv.customer_email ? `<p>${inv.customer_email}</p>` : ''}
+      <p><strong>${escapeHtml(inv.customer_name)}</strong></p>
+      ${inv.customer_address ? `<p>${escapeHtml(inv.customer_address)}</p>` : ''}
+      ${inv.customer_email ? `<p>${escapeHtml(inv.customer_email)}</p>` : ''}
     </div>
     <div>
       <p class="label">Invoice Period</p>
@@ -237,7 +251,7 @@ export default function InvoicesPage() {
               const qty = l.qty_override ?? l.qty;
               return `<tr>
                 <td></td>
-                <td>${l.crop_name}${l.size_name ? ` (${l.size_name})` : ''}</td>
+                <td>${escapeHtml(l.crop_name)}${l.size_name ? ` (${escapeHtml(l.size_name)})` : ''}</td>
                 <td class="right">${qty}</td>
                 <td class="right">€${l.unit_price.toFixed(2)}</td>
                 <td class="right">€${(qty * l.unit_price).toFixed(2)}</td>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchFromSupabase } from '@/lib/supabase';
+import { verifySession } from '@/lib/session';
 import {
   addDays,
   deliversOnTuesday,
@@ -55,11 +56,14 @@ export async function GET(request: NextRequest) {
   try {
     const headerSecret = request.headers.get('x-sync-secret');
     const hasSecret = !!SYNC_SECRET && headerSecret === SYNC_SECRET;
-    // Fall through to middleware's session check if no valid secret — the
-    // matcher already ran before this handler, so reaching here means either
-    // a valid session or this route being explicitly public. We require one
-    // of the two explicitly since this route also carries pricing data.
-    if (!hasSecret && !request.cookies.get('belarro_session')?.value) {
+    // This route is in middleware.ts's PUBLIC_API list (Sales Tracker calls
+    // it cross-origin with x-sync-secret instead of a session cookie), so
+    // middleware never verifies the session for it — this route must do
+    // that itself. A mere cookie-presence check isn't enough since anyone
+    // can send an unsigned/garbage belarro_session value.
+    const token = request.cookies.get('belarro_session')?.value;
+    const session = token ? await verifySession(token) : null;
+    if (!hasSecret && !session) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401, headers });
     }
 
