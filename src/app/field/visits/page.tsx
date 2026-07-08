@@ -121,8 +121,8 @@ export default function FieldVisitsPage() {
       {showForm && (
         <VisitForm
           loc={formLoc}
-          onClose={() => setShowForm(false)}
-          onSaved={() => { setShowForm(false); load(); }}
+          onClose={() => { setShowForm(false); load(); }}
+          onSaved={() => load()}
         />
       )}
     </div>
