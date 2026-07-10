@@ -32,6 +32,16 @@ import {
  *
  * Deliveries: only orders currently active on the Orders admin page appear
  * here — no grace-period/draining for removed orders.
+ *
+ * Standing orders (belarro_v4_standing_order / _item) are a SEPARATE table
+ * from belarro_v4_order and were previously invisible to this route entirely
+ * — a standing-order customer's crops never appeared in seeding, delivery, or
+ * daily-ops no matter what was configured, because nothing here ever queried
+ * that table. Standing-order items have no next_delivery_date/frequency
+ * (no biweekly concept — "standing" means it repeats every week
+ * indefinitely), so they're folded into the same seed/delivery schedule
+ * unconditionally: every active item seeds on its crop's bucket day every
+ * single week, and delivers every Tuesday.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -39,12 +49,15 @@ export async function GET(request: NextRequest) {
 
     const today = localMidnight(new Date());
 
-    // Orders admin page is the single source of truth: only orders that are
-    // currently active there may appear here. No "draining"/grace-period
+    // Orders admin page is the single source of truth for one-time orders:
+    // only orders active there may appear here. No "draining"/grace-period
     // logic for removed orders — if it's not active on Orders, it's not
-    // shown on Production, period.
-    const [activeOrders, variants, crops, procedures, customers, batches, harvests, mixComponents] = await Promise.all([
+    // shown on Production, period. Standing orders are folded in separately
+    // below since they carry no per-line delivery/frequency fields.
+    const [activeOrders, standingOrders, standingItems, variants, crops, procedures, customers, batches, harvests, mixComponents] = await Promise.all([
       fetchFromSupabase('/belarro_v4_order?status=in.(active,pending_seed,growing)&deleted_at=is.null&select=*'),
+      fetchFromSupabase('/belarro_v4_standing_order?status=eq.active&select=id,customer_id'),
+      fetchFromSupabase('/belarro_v4_standing_order_item?select=*'),
       fetchFromSupabase('/belarro_v4_product_variant?select=*'),
       fetchFromSupabase('/belarro_v4_crop?select=*'),
       fetchFromSupabase('/belarro_v4_growth_procedure?select=crop_id,stack_days,stack_enabled,blackout_days,blackout_enabled,light_days,light_enabled'),
@@ -53,6 +66,20 @@ export async function GET(request: NextRequest) {
       fetchFromSupabase('/belarro_v4_harvest_record?select=*'),
       fetchFromSupabase('/belarro_v4_crop_mix_component?select=*'),
     ]);
+
+    // Standing-order items don't carry product_variant_id/quantity/customer_id
+    // directly (they reference their parent standing_order for customer),
+    // so normalize them into the same shape componentsOf/lineItem expect.
+    const standingOrderCustomer = new Map<string, string>((standingOrders || []).map((so: any) => [so.id, so.customer_id]));
+    const standingLines = (standingItems || [])
+      .map((it: any) => ({
+        id: `standing:${it.id}`,
+        customer_id: standingOrderCustomer.get(it.standing_order_id),
+        product_variant_id: it.variant_id,
+        quantity: it.quantity,
+        is_standing: true,
+      }))
+      .filter((l: any) => l.customer_id); // drop items whose parent order isn't active/found
 
     const varMap = new Map<string, any>((variants || []).map((v: any) => [v.id, v]));
     const cropMap = new Map<string, any>((crops || []).map((c: any) => [c.id, c]));
@@ -135,10 +162,16 @@ export async function GET(request: NextRequest) {
       return [{ cropId: crop.id, grams: totalGrams, growDays }];
     };
 
-    const lines = (activeOrders || []).filter((o: any) => {
-      const c = custMap.get(o.customer_id);
-      return c?.name || c?.restaurant_name;
-    });
+    const lines = [
+      ...(activeOrders || []).filter((o: any) => {
+        const c = custMap.get(o.customer_id);
+        return c?.name || c?.restaurant_name;
+      }),
+      ...standingLines.filter((l: any) => {
+        const c = custMap.get(l.customer_id);
+        return c?.name || c?.restaurant_name;
+      }),
+    ];
 
     // ── SEED SLOTS: next 4 Tuesdays + next 4 Fridays ──────────────────
     const nextTuesday = nextTuesdayOnOrAfter(today);
@@ -153,6 +186,16 @@ export async function GET(request: NextRequest) {
     const slotItems = (slotDate: Date, slotDay: number) => {
       const grams = new Map<string, number>();
       for (const line of lines) {
+        // Standing orders have no anchor date/frequency — they repeat every
+        // single week indefinitely, so they seed on every occurrence of
+        // their crop's bucket day with no firstSeed/cadence check.
+        if (line.is_standing) {
+          for (const comp of componentsOf(line)) {
+            if (seedDayFor(comp.growDays) !== slotDay) continue;
+            grams.set(comp.cropId, (grams.get(comp.cropId) || 0) + comp.grams);
+          }
+          continue;
+        }
         const firstDelivery = firstDeliveryOf(line, lines);
         for (const comp of componentsOf(line)) {
           if (seedDayFor(comp.growDays) !== slotDay) continue;
@@ -236,6 +279,9 @@ export async function GET(request: NextRequest) {
 
         for (const line of lines) {
           if (line.customer_id !== customerId) continue;
+          // Standing orders deliver every Tuesday, unconditionally — no
+          // anchor/frequency to check against.
+          if (line.is_standing) { items.push(lineItem(line)); continue; }
           const firstDelivery = firstDeliveryOf(line, lines);
           if (deliversOnTuesday(t, firstDelivery, line.frequency, line.recurring)) items.push(lineItem(line));
         }

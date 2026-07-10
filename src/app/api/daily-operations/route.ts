@@ -42,13 +42,32 @@ interface SeedingPlan {
 
 export async function GET(request: NextRequest) {
   try {
-    const [orders, variants, crops, procedures, mixComponents] = await Promise.all([
+    const [orders, standingOrders, standingItems, variants, crops, procedures, mixComponents] = await Promise.all([
       fetchFromSupabase('/belarro_v4_order?status=in.(active,pending_seed,growing)&deleted_at=is.null&select=*'),
+      fetchFromSupabase('/belarro_v4_standing_order?status=eq.active&select=id,customer_id'),
+      fetchFromSupabase('/belarro_v4_standing_order_item?select=*'),
       fetchFromSupabase('/belarro_v4_product_variant?select=*'),
       fetchFromSupabase('/belarro_v4_crop?select=*'),
       fetchFromSupabase('/belarro_v4_growth_procedure?select=*'), // select=* already includes _enabled columns
       fetchFromSupabase('/belarro_v4_crop_mix_component?select=*'),
     ]);
+
+    // Standing-order items (belarro_v4_standing_order_item) were previously
+    // invisible here entirely — no code path in this route ever queried that
+    // table, so a standing-order customer's crops never appeared on the
+    // Daily Operations calendar no matter what was configured. They carry no
+    // next_delivery_date/frequency (no biweekly concept — "standing" repeats
+    // every week indefinitely).
+    const standingOrderCustomer = new Map<string, string>((standingOrders || []).map((so: any) => [so.id, so.customer_id]));
+    const standingLines = (standingItems || [])
+      .map((it: any) => ({
+        id: `standing:${it.id}`,
+        customer_id: standingOrderCustomer.get(it.standing_order_id),
+        product_variant_id: it.variant_id,
+        quantity: it.quantity,
+        is_standing: true,
+      }))
+      .filter((l: any) => l.customer_id);
 
     const varMap = new Map<string, any>((variants || []).map((v: any) => [v.id, v]));
     const cropMap = new Map<string, any>((crops || []).map((c: any) => [c.id, c]));
@@ -64,7 +83,7 @@ export async function GET(request: NextRequest) {
     // Same per-line first-delivery resolution as /api/production: stored
     // next_delivery_date wins; legacy rows without it fall back to aligning
     // from their order event (siblings created within 10 minutes).
-    const lines = orders || [];
+    const lines = [...(orders || []), ...standingLines];
     const firstDeliveryOf = (line: any): Date => {
       if (line.next_delivery_date) {
         return localMidnight(new Date(line.next_delivery_date));
@@ -114,10 +133,36 @@ export async function GET(request: NextRequest) {
         const crop = variant ? cropMap.get(variant.crop_id) : null;
         if (!crop) continue;
 
-        const firstDelivery = firstDeliveryOf(order);
         const orderQty = order.quantity || 1;
         const sizeGrams = variant?.size_grams || 0;
         const totalGrams = orderQty * sizeGrams;
+
+        // Standing orders have no anchor/frequency — they repeat every
+        // single week indefinitely, so they belong on every occurrence of
+        // their crop's bucket day with no firstSeed/cadence check.
+        if (order.is_standing) {
+          if (crop.is_mix) {
+            for (const comp of (mixComponentsMap.get(crop.id) || [])) {
+              const compGrowDays = growDaysFromProc(procMap.get(comp.component_crop_id));
+              if (compGrowDays === 0) continue;
+              const belongsHere = dayOfWeek === TUESDAY ? compGrowDays > 10 : compGrowDays <= 10;
+              if (!belongsHere) continue;
+              gramsForDay.set(
+                comp.component_crop_id,
+                (gramsForDay.get(comp.component_crop_id) || 0) + totalGrams * (comp.percentage / 100)
+              );
+            }
+          } else {
+            const growDays = growDaysFromProc(procMap.get(crop.id));
+            if (growDays === 0) continue;
+            const belongsHere = dayOfWeek === TUESDAY ? growDays > 10 : growDays <= 10;
+            if (!belongsHere) continue;
+            gramsForDay.set(crop.id, (gramsForDay.get(crop.id) || 0) + totalGrams);
+          }
+          continue;
+        }
+
+        const firstDelivery = firstDeliveryOf(order);
 
         // Mixes have no procedure of their own — expand into components and
         // bucket each component by ITS OWN grow days (a mix can span both
