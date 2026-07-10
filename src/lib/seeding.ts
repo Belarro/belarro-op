@@ -110,10 +110,17 @@ export function lastDeliveryAfterStop(changeDate: Date, growDays: number): Date 
   return deliveryTuesdayFor(lastSeed, growDays);
 }
 
-// Total grow days from a growth procedure row.
+// Total grow days from a growth procedure row. Respects each stage's
+// _enabled toggle — a stage with days filled in but disabled in the Grow
+// Procedure UI must not count toward the total (previously every call site
+// but the manual seeding-batch POST ignored these flags, so unchecking a
+// stage silently left harvest/seed-day math unchanged).
 export function growDaysFromProc(proc: any): number {
   if (!proc) return 0;
-  return (proc.stack_days || 0) + (proc.blackout_days || 0) + (proc.light_days || 0);
+  const stack = proc.stack_enabled === true ? (proc.stack_days || 0) : 0;
+  const blackout = proc.blackout_enabled === true ? (proc.blackout_days || 0) : 0;
+  const light = proc.light_enabled === true ? (proc.light_days || 0) : 0;
+  return stack + blackout + light;
 }
 
 // Grow days for a crop; mixes use their longest component.

@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
       fetchFromSupabase('/belarro_v4_order?status=in.(active,pending_seed,growing)&deleted_at=is.null&select=*'),
       fetchFromSupabase('/belarro_v4_product_variant?select=*'),
       fetchFromSupabase('/belarro_v4_crop?select=*'),
-      fetchFromSupabase('/belarro_v4_growth_procedure?select=crop_id,stack_days,blackout_days,light_days'),
+      fetchFromSupabase('/belarro_v4_growth_procedure?select=crop_id,stack_days,stack_enabled,blackout_days,blackout_enabled,light_days,light_enabled'),
       fetchFromSupabase('/belarro_v4_customer?select=id,name,restaurant_name,address,phone&deleted_at=is.null'),
       fetchFromSupabase('/belarro_v4_crop_mix_component?select=*'),
       fetchFromSupabase(`/belarro_v4_delivery?delivery_date=eq.${targetKey}&deleted_at=is.null&select=*`),

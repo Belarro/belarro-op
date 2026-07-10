@@ -1,33 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchFromSupabase } from '@/lib/supabase';
-
-const TUESDAY = 2;
-const FRIDAY = 5;
-
-function nextDayOnOrAfter(from: Date, day: number): Date {
-  const d = new Date(from);
-  d.setHours(0, 0, 0, 0);
-  while (d.getDay() !== day) d.setDate(d.getDate() + 1);
-  return d;
-}
-
-function nextTuesdayOnOrAfter(from: Date): Date {
-  const d = new Date(from);
-  d.setHours(0, 0, 0, 0);
-  while (d.getDay() !== TUESDAY) d.setDate(d.getDate() + 1);
-  return d;
-}
-
-// Local-timezone date key. Never use toISOString here: local midnight in
-// Berlin (UTC+2) converts to 22:00 the PREVIOUS day in UTC, shifting every
-// date in the calendar one day early.
-function ymd(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function fmt(d: Date): string {
-  return d.toLocaleDateString('en-DE', { weekday: 'short', day: 'numeric', month: 'short' });
-}
+import {
+  alignedFirstDelivery,
+  effectiveGrowDays,
+  firstSeedFor,
+  growDaysFromProc,
+  localMidnight,
+  nextDayOnOrAfter,
+  nextTuesdayOnOrAfter,
+  seedsAtSlot,
+  ymd,
+  fmt,
+  FRIDAY,
+  TUESDAY,
+} from '@/lib/seeding';
 
 interface DailyTask {
   crop_name: string;
@@ -60,7 +46,7 @@ export async function GET(request: NextRequest) {
       fetchFromSupabase('/belarro_v4_order?status=in.(active,pending_seed,growing)&deleted_at=is.null&select=*'),
       fetchFromSupabase('/belarro_v4_product_variant?select=*'),
       fetchFromSupabase('/belarro_v4_crop?select=*'),
-      fetchFromSupabase('/belarro_v4_growth_procedure?select=*'),
+      fetchFromSupabase('/belarro_v4_growth_procedure?select=*'), // select=* already includes _enabled columns
       fetchFromSupabase('/belarro_v4_crop_mix_component?select=*'),
     ]);
 
@@ -73,23 +59,34 @@ export async function GET(request: NextRequest) {
       mixComponentsMap.get(mc.mix_crop_id)!.push(mc);
     }
 
-    const isoWeek = (d: Date): number => {
-      const tmp = new Date(d);
-      tmp.setHours(0, 0, 0, 0);
-      tmp.setDate(tmp.getDate() + 3 - ((tmp.getDay() + 6) % 7));
-      const week1 = new Date(tmp.getFullYear(), 0, 4);
-      return 1 + Math.round(((tmp.getTime() - week1.getTime()) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
-    };
+    const today = localMidnight(new Date());
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const thisWeekNum = isoWeek(today);
+    // Same per-line first-delivery resolution as /api/production: stored
+    // next_delivery_date wins; legacy rows without it fall back to aligning
+    // from their order event (siblings created within 10 minutes).
+    const lines = orders || [];
+    const firstDeliveryOf = (line: any): Date => {
+      if (line.next_delivery_date) {
+        return localMidnight(new Date(line.next_delivery_date));
+      }
+      const createdAt = new Date(line.created_at || line.order_date || today);
+      let maxGrowDays = 0;
+      for (const sibling of lines) {
+        if (sibling.customer_id !== line.customer_id) continue;
+        const siblingCreated = new Date(sibling.created_at || sibling.order_date || 0);
+        if (Math.abs(siblingCreated.getTime() - createdAt.getTime()) > 10 * 60 * 1000) continue;
+        const v = varMap.get(sibling.product_variant_id);
+        const c = v ? cropMap.get(v.crop_id) : null;
+        const d = effectiveGrowDays(c, procMap, mixComponentsMap);
+        if (d > maxGrowDays) maxGrowDays = d;
+      }
+      return alignedFirstDelivery(createdAt, maxGrowDays || 10);
+    };
 
     const seedingPlans: SeedingPlan[] = [];
 
     const nextTuesday = nextTuesdayOnOrAfter(today);
-    const nextFriday = new Date(today);
-    while (nextFriday.getDay() !== FRIDAY) nextFriday.setDate(nextFriday.getDate() + 1);
+    const nextFriday = nextDayOnOrAfter(today, FRIDAY);
 
     // Upcoming seed dates (next 4 Tuesdays and Fridays)
     const upcomingSeedDates: Date[] = [];
@@ -105,7 +102,6 @@ export async function GET(request: NextRequest) {
 
     // For each upcoming seed date, calculate what needs to be seeded
     for (const seedDate of upcomingSeedDates) {
-      const weekNum = isoWeek(seedDate);
       const dayOfWeek = seedDate.getDay();
       const isSeeding = dayOfWeek === TUESDAY || dayOfWeek === FRIDAY;
 
@@ -113,19 +109,12 @@ export async function GET(request: NextRequest) {
 
       const gramsForDay = new Map<string, number>();
 
-      // Grow days for a crop id, from its own procedure
-      const growDaysOf = (cropId: string): number => {
-        const p = procMap.get(cropId);
-        return p ? (p.stack_days || 0) + (p.blackout_days || 0) + (p.light_days || 0) : 0;
-      };
-
-      for (const order of (orders || [])) {
-        if (order.frequency === 'biweekly' && weekNum % 2 !== 0) continue;
-
+      for (const order of lines) {
         const variant = varMap.get(order.product_variant_id);
         const crop = variant ? cropMap.get(variant.crop_id) : null;
         if (!crop) continue;
 
+        const firstDelivery = firstDeliveryOf(order);
         const orderQty = order.quantity || 1;
         const sizeGrams = variant?.size_grams || 0;
         const totalGrams = orderQty * sizeGrams;
@@ -135,20 +124,24 @@ export async function GET(request: NextRequest) {
         // Tuesday and Friday seedings).
         if (crop.is_mix) {
           for (const comp of (mixComponentsMap.get(crop.id) || [])) {
-            const compGrowDays = growDaysOf(comp.component_crop_id);
+            const compGrowDays = growDaysFromProc(procMap.get(comp.component_crop_id));
             if (compGrowDays === 0) continue;
             const belongsHere = dayOfWeek === TUESDAY ? compGrowDays > 10 : compGrowDays <= 10;
             if (!belongsHere) continue;
+            const compFirstSeed = firstSeedFor(firstDelivery, compGrowDays);
+            if (!seedsAtSlot(seedDate, compFirstSeed, order.frequency, order.recurring)) continue;
             gramsForDay.set(
               comp.component_crop_id,
               (gramsForDay.get(comp.component_crop_id) || 0) + totalGrams * (comp.percentage / 100)
             );
           }
         } else {
-          const growDays = growDaysOf(crop.id);
+          const growDays = growDaysFromProc(procMap.get(crop.id));
           if (growDays === 0) continue;
           const belongsHere = dayOfWeek === TUESDAY ? growDays > 10 : growDays <= 10;
           if (!belongsHere) continue;
+          const firstSeed = firstSeedFor(firstDelivery, growDays);
+          if (!seedsAtSlot(seedDate, firstSeed, order.frequency, order.recurring)) continue;
           gramsForDay.set(crop.id, (gramsForDay.get(crop.id) || 0) + totalGrams);
         }
       }
@@ -294,7 +287,7 @@ export async function GET(request: NextRequest) {
       }
 
       // 6. Harvest (on next Tuesday after all growing days)
-      const totalGrowDays = (proc.stack_days || 0) + (proc.blackout_days || 0) + (proc.light_days || 0);
+      const totalGrowDays = growDaysFromProc(proc);
       const harvestRaw = new Date(seedDate);
       harvestRaw.setDate(harvestRaw.getDate() + totalGrowDays);
       const harvestTuesday = nextTuesdayOnOrAfter(harvestRaw);

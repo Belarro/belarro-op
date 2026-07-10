@@ -73,6 +73,7 @@ interface ProductionData {
   today: string;
   next_tuesday: string;
   next_friday: string;
+  missing_procedures: string[];
 }
 
 function fmt(dateStr: string) {
@@ -299,6 +300,13 @@ export default function ProductionPage() {
       <div>
         <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Production</h1>
       </div>
+
+      {!!data?.missing_procedures?.length && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4 text-sm text-red-800">
+          <span className="font-bold">Missing grow procedure — excluded from seeding/harvest schedule: </span>
+          {data.missing_procedures.join(', ')}. Add a procedure in Grow Procedure to include{data.missing_procedures.length > 1 ? ' them' : ' it'} in Production.
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex border-b border-gray-200">

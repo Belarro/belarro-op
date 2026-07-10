@@ -1,9 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchFromSupabase } from '@/lib/supabase';
+import {
+  alignedFirstDelivery,
+  effectiveGrowDays,
+  firstSeedFor,
+  growDaysFromProc,
+  localMidnight,
+  seedDayFor,
+  seedsAtSlot,
+  ymd,
+} from '@/lib/seeding';
 
 // Called automatically by pg_cron every Tuesday and Friday at 06:00 Berlin time.
 // Calculates what needs to be seeded today, deducts seeds from inventory,
 // and logs each deduction to belarro_v4_seed_usage_log.
+//
+// Cadence math (which crops seed today, biweekly on/off, one-off "recurring:
+// false" extras) is shared with /api/production via lib/seeding.ts — this
+// route previously reimplemented it with a global ISO-week-parity check for
+// "biweekly," anchored to the calendar instead of each order line's own
+// first-seed date, and had no concept of one-off orders at all. Two biweekly
+// customers whose orders started a week apart would fall in opposite phase
+// under that check while /api/production (correctly) staggered them by their
+// own anchors — the same crop could be "on" here and "off" there for the same
+// week, silently double-deducting or skipping seed inventory relative to what
+// Production actually scheduled.
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,25 +35,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = localMidnight(new Date());
     const dayOfWeek = today.getDay(); // 2=Tuesday, 5=Friday
 
     if (dayOfWeek !== 2 && dayOfWeek !== 5) {
       return NextResponse.json({ success: true, message: 'Not a seeding day', deductions: [] });
     }
 
-    // ISO week number — used for biweekly logic
-    const tmp = new Date(today);
-    tmp.setDate(tmp.getDate() + 3 - ((tmp.getDay() + 6) % 7));
-    const week1 = new Date(tmp.getFullYear(), 0, 4);
-    const thisWeekNum = 1 + Math.round(((tmp.getTime() - week1.getTime()) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
-
     const [orders, variants, crops, procedures, mixComponents, seedInventory] = await Promise.all([
       fetchFromSupabase('/belarro_v4_order?status=in.(active,pending_seed,growing)&deleted_at=is.null&select=*'),
       fetchFromSupabase('/belarro_v4_product_variant?select=*'),
       fetchFromSupabase('/belarro_v4_crop?select=*'),
-      fetchFromSupabase('/belarro_v4_growth_procedure?select=crop_id,stack_days,blackout_days,light_days'),
+      fetchFromSupabase('/belarro_v4_growth_procedure?select=crop_id,stack_days,stack_enabled,blackout_days,blackout_enabled,light_days,light_enabled'),
       fetchFromSupabase('/belarro_v4_crop_mix_component?select=*'),
       fetchFromSupabase('/belarro_v4_seed_inventory?select=*'),
     ]);
@@ -40,16 +54,35 @@ export async function POST(request: NextRequest) {
     const varMap = new Map<string, any>((variants || []).map((v: any) => [v.id, v]));
     const cropMap = new Map<string, any>((crops || []).map((c: any) => [c.id, c]));
     const procMap = new Map<string, any>((procedures || []).map((p: any) => [p.crop_id, p]));
-    const mixMap = new Map<string, any[]>();
+    const mixComponentsMap = new Map<string, any[]>();
     for (const mc of (mixComponents || [])) {
-      if (!mixMap.has(mc.mix_crop_id)) mixMap.set(mc.mix_crop_id, []);
-      mixMap.get(mc.mix_crop_id)!.push(mc);
+      if (!mixComponentsMap.has(mc.mix_crop_id)) mixComponentsMap.set(mc.mix_crop_id, []);
+      mixComponentsMap.get(mc.mix_crop_id)!.push(mc);
     }
     // Inventory keyed by crop_id
     const invMap = new Map<string, any>((seedInventory || []).map((s: any) => [s.crop_id, s]));
 
-    const TUESDAY = 2;
-    const FRIDAY = 5;
+    // Same per-line first-delivery resolution as /api/production: stored
+    // next_delivery_date wins; legacy rows without it fall back to aligning
+    // from their order event (siblings created within 10 minutes).
+    const lines = orders || [];
+    const firstDeliveryOf = (line: any): Date => {
+      if (line.next_delivery_date) {
+        return localMidnight(new Date(line.next_delivery_date));
+      }
+      const createdAt = new Date(line.created_at || line.order_date || today);
+      let maxGrowDays = 0;
+      for (const sibling of lines) {
+        if (sibling.customer_id !== line.customer_id) continue;
+        const siblingCreated = new Date(sibling.created_at || sibling.order_date || 0);
+        if (Math.abs(siblingCreated.getTime() - createdAt.getTime()) > 10 * 60 * 1000) continue;
+        const v = varMap.get(sibling.product_variant_id);
+        const c = v ? cropMap.get(v.crop_id) : null;
+        const d = effectiveGrowDays(c, procMap, mixComponentsMap);
+        if (d > maxGrowDays) maxGrowDays = d;
+      }
+      return alignedFirstDelivery(createdAt, maxGrowDays || 10);
+    };
 
     // Accumulate total grams needed per component crop today
     const gramsNeeded = new Map<string, number>();
@@ -57,35 +90,31 @@ export async function POST(request: NextRequest) {
       gramsNeeded.set(cropId, (gramsNeeded.get(cropId) || 0) + grams);
     };
 
-    for (const order of (orders || [])) {
-      if (order.frequency === 'biweekly' && thisWeekNum % 2 !== 0) continue;
-
+    for (const order of lines) {
       const variant = varMap.get(order.product_variant_id);
       const crop = variant ? cropMap.get(variant.crop_id) : null;
       if (!crop) continue;
 
+      const firstDelivery = firstDeliveryOf(order);
       const orderQty = order.quantity || 1;
       const sizeGrams = variant?.size_grams || 0;
       const totalGrams = orderQty * sizeGrams;
 
       if (crop.is_mix) {
-        const components = mixMap.get(crop.id) || [];
-        for (const comp of components) {
-          const compProc = procMap.get(comp.component_crop_id);
-          const compGrowDays = compProc
-            ? (compProc.stack_days || 0) + (compProc.blackout_days || 0) + (compProc.light_days || 0)
-            : 0;
-          const seedsOnDay = compGrowDays > 10 ? TUESDAY : FRIDAY;
-          if (seedsOnDay !== dayOfWeek) continue;
+        for (const comp of (mixComponentsMap.get(crop.id) || [])) {
+          const compGrowDays = growDaysFromProc(procMap.get(comp.component_crop_id));
+          if (compGrowDays === 0) continue;
+          if (seedDayFor(compGrowDays) !== dayOfWeek) continue;
+          const firstSeed = firstSeedFor(firstDelivery, compGrowDays);
+          if (!seedsAtSlot(today, firstSeed, order.frequency, order.recurring)) continue;
           addGrams(comp.component_crop_id, totalGrams * (comp.percentage / 100));
         }
       } else {
-        const proc = procMap.get(crop.id);
-        const growDays = proc
-          ? (proc.stack_days || 0) + (proc.blackout_days || 0) + (proc.light_days || 0)
-          : 0;
-        const seedsOnDay = growDays > 10 ? TUESDAY : FRIDAY;
-        if (seedsOnDay !== dayOfWeek) continue;
+        const growDays = growDaysFromProc(procMap.get(crop.id));
+        if (growDays === 0) continue;
+        if (seedDayFor(growDays) !== dayOfWeek) continue;
+        const firstSeed = firstSeedFor(firstDelivery, growDays);
+        if (!seedsAtSlot(today, firstSeed, order.frequency, order.recurring)) continue;
         addGrams(crop.id, totalGrams);
       }
     }
@@ -125,7 +154,7 @@ export async function POST(request: NextRequest) {
           crop_id: cropId,
           quantity_used_grams: seedsToDeduct,
           trays_seeded: trays,
-          seeded_date: today.toISOString(),
+          seeded_date: ymd(today),
         }),
       });
 
@@ -137,7 +166,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({ success: true, date: today.toISOString().split('T')[0], deductions });
+    return NextResponse.json({ success: true, date: ymd(today), deductions });
   } catch (error) {
     console.error('deduct-seeds error:', error);
     return NextResponse.json(

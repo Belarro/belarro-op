@@ -77,7 +77,7 @@ export async function PUT(request: NextRequest, props: Params) {
       const [variants, crops, procedures, mixComponents] = await Promise.all([
         fetchFromSupabase('/belarro_v4_product_variant?select=*'),
         fetchFromSupabase('/belarro_v4_crop?select=*'),
-        fetchFromSupabase('/belarro_v4_growth_procedure?select=crop_id,stack_days,blackout_days,light_days'),
+        fetchFromSupabase('/belarro_v4_growth_procedure?select=crop_id,stack_days,stack_enabled,blackout_days,blackout_enabled,light_days,light_enabled'),
         fetchFromSupabase('/belarro_v4_crop_mix_component?select=*'),
       ]);
       const varMap = new Map<string, any>((variants || []).map((v: any) => [v.id, v]));

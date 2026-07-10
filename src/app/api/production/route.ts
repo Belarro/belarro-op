@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
       fetchFromSupabase('/belarro_v4_order?status=in.(active,pending_seed,growing)&deleted_at=is.null&select=*'),
       fetchFromSupabase('/belarro_v4_product_variant?select=*'),
       fetchFromSupabase('/belarro_v4_crop?select=*'),
-      fetchFromSupabase('/belarro_v4_growth_procedure?select=crop_id,stack_days,blackout_days,light_days'),
+      fetchFromSupabase('/belarro_v4_growth_procedure?select=crop_id,stack_days,stack_enabled,blackout_days,blackout_enabled,light_days,light_enabled'),
       fetchFromSupabase('/belarro_v4_customer?select=id,name,restaurant_name&deleted_at=is.null'),
       fetchFromSupabase('/belarro_v4_seeding_batch?select=*'),
       fetchFromSupabase('/belarro_v4_harvest_record?select=*'),
@@ -103,6 +103,11 @@ export async function GET(request: NextRequest) {
       return alignedFirstDelivery(createdAt, maxGrowDays || 10);
     };
 
+    // Crops silently dropped from seeding because they have no growth
+    // procedure row (or every stage disabled, netting 0 grow days) — surfaced
+    // to the UI instead of just vanishing from the schedule with no trace.
+    const missingProcedureCropIds = new Set<string>();
+
     // Expand a line into its component crops with grams.
     // Mixes split by percentage; each component keeps its own grow days.
     const componentsOf = (line: any): Array<{ cropId: string; grams: number; growDays: number }> => {
@@ -114,13 +119,19 @@ export async function GET(request: NextRequest) {
         const out: Array<{ cropId: string; grams: number; growDays: number }> = [];
         for (const comp of (mixComponentsMap.get(crop.id) || [])) {
           const growDays = growDaysFromProc(procMap.get(comp.component_crop_id));
-          if (growDays === 0) continue;
+          if (growDays === 0) {
+            missingProcedureCropIds.add(comp.component_crop_id);
+            continue;
+          }
           out.push({ cropId: comp.component_crop_id, grams: totalGrams * (comp.percentage / 100), growDays });
         }
         return out;
       }
       const growDays = growDaysFromProc(procMap.get(crop.id));
-      if (growDays === 0) return [];
+      if (growDays === 0) {
+        missingProcedureCropIds.add(crop.id);
+        return [];
+      }
       return [{ cropId: crop.id, grams: totalGrams, growDays }];
     };
 
@@ -189,6 +200,11 @@ export async function GET(request: NextRequest) {
     const flatSeedDay = (dateKey: string) => bySlotDate.get(dateKey) || [];
 
     // ── DELIVERY SCHEDULE (per customer) ────────────────────────────────
+    // Keyed by `${customerId}|${date}`, not just customerId — a customer can
+    // have two crops on different cadences that land on different Tuesdays
+    // within the window (e.g. weekly basil + biweekly pea shoots on their
+    // off week). Keying by customer alone and stopping at the first match
+    // silently dropped every delivery after the earliest one.
     const customerDeliveryMap = new Map<string, { harvest_date: string; harvest_display: string; customer_name: string; items: any[] }>();
     const upcomingTuesdays: Date[] = [];
     for (let w = 0; w < 6; w++) upcomingTuesdays.push(addDays(nextTuesday, w * 7));
@@ -225,13 +241,12 @@ export async function GET(request: NextRequest) {
         }
 
         if (items.length > 0) {
-          customerDeliveryMap.set(customerId, {
+          customerDeliveryMap.set(`${customerId}|${ymd(t)}`, {
             harvest_date: ymd(t),
             harvest_display: fmt(t),
             customer_name: customer.restaurant_name || customer.name,
             items,
           });
-          break; // earliest delivering Tuesday found for this customer
         }
       }
     }
@@ -239,6 +254,10 @@ export async function GET(request: NextRequest) {
     const schedule = Array.from(customerDeliveryMap.values()).sort((a, b) =>
       a.harvest_date.localeCompare(b.harvest_date) || a.customer_name.localeCompare(b.customer_name)
     );
+
+    const missingProcedures = Array.from(missingProcedureCropIds)
+      .map(id => cropMap.get(id)?.name_en || id)
+      .sort();
 
     return NextResponse.json({
       success: true,
@@ -253,6 +272,7 @@ export async function GET(request: NextRequest) {
         today: ymd(today),
         next_tuesday: ymd(nextTuesday),
         next_friday: ymd(nextFriday),
+        missing_procedures: missingProcedures,
       },
     });
   } catch (error) {
