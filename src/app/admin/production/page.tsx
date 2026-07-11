@@ -64,6 +64,7 @@ interface ProductionData {
     harvest_display: string;
     customer_name: string;
     items: any[];
+    off_week_notes?: { crop_name: string; next_due_display: string }[];
   }[];
   seed_tuesday: any[];
   seed_friday: any[];
@@ -519,28 +520,39 @@ export default function ProductionPage() {
                           <span className="font-bold text-gray-900">{delivery.customer_name}</span>
                           <span className="ml-3 text-sm text-gray-500">Delivery: {delivery.harvest_display}</span>
                         </div>
-                        <span className="text-xs font-semibold text-gray-500 bg-white border border-gray-200 px-2 py-1 rounded-lg">
-                          {delivery.items.length} items
-                        </span>
+                        {delivery.items.length > 0 && (
+                          <span className="text-xs font-semibold text-gray-500 bg-white border border-gray-200 px-2 py-1 rounded-lg">
+                            {delivery.items.length} items
+                          </span>
+                        )}
                       </div>
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="text-xs font-semibold text-gray-400 uppercase border-b border-gray-100">
-                            <th className="px-5 py-2 text-left">Variety</th>
-                            <th className="px-5 py-2 text-right">Qty</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-50">
-                          {delivery.items.map((item: any, i: number) => (
-                            <tr key={i} className="hover:bg-gray-50">
-                              <td className="px-5 py-3 font-semibold text-gray-900">{item.crop_name}</td>
-                              <td className="px-5 py-3 text-right text-gray-700">
-                                {item.order_qty}× <span className="text-xs text-gray-500">{item.size_name || `${item.size_grams}g`}</span>
-                              </td>
+                      {delivery.items.length > 0 && (
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-xs font-semibold text-gray-400 uppercase border-b border-gray-100">
+                              <th className="px-5 py-2 text-left">Variety</th>
+                              <th className="px-5 py-2 text-right">Qty</th>
                             </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-50">
+                            {delivery.items.map((item: any, i: number) => (
+                              <tr key={i} className="hover:bg-gray-50">
+                                <td className="px-5 py-3 font-semibold text-gray-900">{item.crop_name}</td>
+                                <td className="px-5 py-3 text-right text-gray-700">
+                                  {item.order_qty}× <span className="text-xs text-gray-500">{item.size_name || `${item.size_grams}g`}</span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                      {!!delivery.off_week_notes?.length && (
+                        <div className="px-5 py-2.5 bg-amber-50 border-t border-amber-100 text-xs text-amber-700">
+                          {delivery.off_week_notes.map((n, i) => (
+                            <div key={i}>{n.crop_name} — every 2 weeks, next due {n.next_due_display}</div>
                           ))}
-                        </tbody>
-                      </table>
+                        </div>
+                      )}
                     </div>
                   ))
                 )

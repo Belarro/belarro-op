@@ -270,6 +270,13 @@ export async function GET(request: NextRequest) {
 
     const customerIds = new Set<string>(lines.map((l: any) => l.customer_id));
 
+    // Biweekly lines that fall on their OFF week for the nearest upcoming
+    // Tuesday used to just vanish from the schedule with no trace, reading as
+    // "this crop disappeared" instead of "it's not due until its next cycle."
+    // Surfaced per customer so it's visible right where the crop would have
+    // been expected.
+    const offWeekNotes = new Map<string, Array<{ crop_name: string; next_due_display: string }>>();
+
     for (const customerId of customerIds) {
       const customer = custMap.get(customerId);
       if (!customer?.name && !customer?.restaurant_name) continue;
@@ -283,7 +290,18 @@ export async function GET(request: NextRequest) {
           // anchor/frequency to check against.
           if (line.is_standing) { items.push(lineItem(line)); continue; }
           const firstDelivery = firstDeliveryOf(line, lines);
-          if (deliversOnTuesday(t, firstDelivery, line.frequency, line.recurring)) items.push(lineItem(line));
+          if (deliversOnTuesday(t, firstDelivery, line.frequency, line.recurring)) {
+            items.push(lineItem(line));
+          } else if (t.getTime() === nextTuesday.getTime() && line.frequency === 'biweekly' && line.recurring !== false) {
+            const diffDays = Math.round((t.getTime() - firstDelivery.getTime()) / 86400000);
+            if (diffDays >= 0) {
+              const weeksToNext = diffDays % 14 === 7 ? 1 : 2;
+              const nextDue = addDays(t, weeksToNext * 7);
+              const arr = offWeekNotes.get(customerId) || [];
+              arr.push({ crop_name: lineItem(line).crop_name, next_due_display: fmt(nextDue) });
+              offWeekNotes.set(customerId, arr);
+            }
+          }
         }
 
         if (items.length > 0) {
@@ -298,6 +316,32 @@ export async function GET(request: NextRequest) {
     }
 
     const schedule = Array.from(customerDeliveryMap.values()).sort((a, b) =>
+      a.harvest_date.localeCompare(b.harvest_date) || a.customer_name.localeCompare(b.customer_name)
+    );
+
+    // Attach off-week notes (nearest Tuesday only) to whichever customer
+    // entry already exists for that date, or synthesize a zero-item entry so
+    // customers whose ONLY line is off-week still show something instead of
+    // disappearing from the delivery tab entirely.
+    for (const [customerId, notes] of offWeekNotes) {
+      const customer = custMap.get(customerId);
+      const key = `${customerId}|${ymd(nextTuesday)}`;
+      const existing = customerDeliveryMap.get(key);
+      if (existing) {
+        (existing as any).off_week_notes = notes;
+      } else {
+        const entry = {
+          harvest_date: ymd(nextTuesday),
+          harvest_display: fmt(nextTuesday),
+          customer_name: customer?.restaurant_name || customer?.name || 'Unknown',
+          items: [],
+          off_week_notes: notes,
+        };
+        customerDeliveryMap.set(key, entry as any);
+        schedule.push(entry as any);
+      }
+    }
+    schedule.sort((a, b) =>
       a.harvest_date.localeCompare(b.harvest_date) || a.customer_name.localeCompare(b.customer_name)
     );
 
