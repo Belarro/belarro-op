@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { resizeImageFile } from '@/lib/image-resize';
 
 interface GrowthProcedure {
   id?: string;
@@ -750,14 +751,19 @@ export default function AdminCropsPage() {
 
                                 try {
                                   showToast('Uploading image...', 'success');
+                                  const resized = await resizeImageFile(file);
                                   const uploadData = new FormData();
-                                  uploadData.append('file', file);
+                                  uploadData.append('file', resized);
 
                                   const uploadRes = await fetch('/api/upload', {
                                     method: 'POST',
                                     body: uploadData,
                                   });
 
+                                  if (!uploadRes.ok) {
+                                    showToast(`Upload failed (${uploadRes.status})`, 'error');
+                                    return;
+                                  }
                                   const json = await uploadRes.json();
                                   if (json.success) {
                                     setFormData(prev => ({ ...prev, photo_url: json.data.url }));
@@ -772,7 +778,7 @@ export default function AdminCropsPage() {
                               }}
                               className="text-sm text-gray-500 file:mr-4 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 cursor-pointer"
                             />
-                            <p className="text-xs text-gray-500">Max size: 5MB (PNG, JPG, GIF)</p>
+                            <p className="text-xs text-gray-500">Any size — resized automatically before upload</p>
                           </div>
                         )}
                       </div>
