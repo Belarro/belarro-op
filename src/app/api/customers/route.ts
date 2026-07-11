@@ -36,12 +36,29 @@ export async function GET(request: NextRequest) {
       created_at: c.created_at,
     }));
 
-    // Build lookup maps for deduplication by phone/email/domain
+    // Phone numbers are stored inconsistently ("01605937534" vs
+    // "+491605937534" for the same German number), so a raw string match
+    // between belarro_v4_customer.phone and locations.direct_phone missed
+    // real dupes. Compare by the last 10 digits instead, which is stable
+    // across local-prefix ("0...") and country-code ("+49...") formats.
+    const normPhone = (p: string | null | undefined): string => {
+      if (!p) return '';
+      const digits = p.replace(/\D/g, '');
+      return digits.slice(-10);
+    };
+
+    // Build lookup maps for deduplication. st_location_id is an exact FK link
+    // set when a belarro customer was created from (or merged with) a
+    // saletracker location — checked first since it's unambiguous, unlike
+    // phone/email which can coincidentally collide or fail to match.
     const belarroCustIds = new Set(customerRows.map((c: any) => c.id));
+    const belarroLinkedLocationIds = new Set(
+      (customers || []).map((c: any) => c.st_location_id).filter(Boolean)
+    );
     const belarroPhones = new Set(
-      customerRows
-        .map((c: any) => c.phone)
-        .filter((p: any) => p && p.trim())
+      (customers || [])
+        .flatMap((c: any) => [normPhone(c.phone), normPhone(c.whatsapp)])
+        .filter(Boolean)
     );
     const belarroEmails = new Set(
       customerRows
@@ -66,11 +83,13 @@ export async function GET(request: NextRequest) {
 
     const locationRows = (locations || [])
       .filter((loc: any) => {
-        // Skip if ID already exists
+        // Skip if ID already exists, or a belarro customer already links to
+        // this location explicitly (st_location_id)
         if (belarroCustIds.has(loc.id)) return false;
+        if (belarroLinkedLocationIds.has(loc.id)) return false;
 
-        // Skip if phone matches
-        const locPhone = loc.direct_phone || loc.business_phone || '';
+        // Skip if phone matches (normalized)
+        const locPhone = normPhone(loc.direct_phone || loc.business_phone || '');
         if (locPhone && belarroPhones.has(locPhone)) return false;
 
         // Skip if email matches
