@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
       `/belarro_v4_crop?deleted_at=is.null&select=id,name_en,name_de,status&order=name_en.asc`
     );
     const variants = await fetchFromSupabase(
-      `/belarro_v4_product_variant?select=*&order=size_grams.asc`
+      `/belarro_v4_product_variant?deleted_at=is.null&select=*&order=size_grams.asc`
     );
     const byCrop = new Map<string, any[]>();
     for (const v of variants || []) {
@@ -172,8 +172,11 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
+    // Soft delete — belarro_v4_product_variant has a no-hard-delete DB
+    // trigger, so the previous real DELETE threw on every attempt.
     await fetchFromSupabase(`/belarro_v4_product_variant?id=eq.${id}`, {
-      method: 'DELETE',
+      method: 'PATCH',
+      body: JSON.stringify({ deleted_at: new Date().toISOString() }),
     });
 
     return NextResponse.json({ success: true, data: { id } });

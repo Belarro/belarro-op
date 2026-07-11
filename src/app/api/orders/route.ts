@@ -165,6 +165,7 @@ export async function POST(request: NextRequest) {
           order_date: orderDate.toISOString(),
           expected_harvest_date: `${ymd(harvest)}T00:00:00+02:00`,
           next_delivery_date: `${ymd(firstDelivery)}T00:00:00+02:00`,
+          price_at_time_eur: variant?.price_eur ?? 0,
           status: 'active',
           recurring: true,
           frequency: line.frequency === 'biweekly' ? 'biweekly' : 'weekly',

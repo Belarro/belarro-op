@@ -155,10 +155,13 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Invalid inventory type' }, { status: 400 });
     }
 
+    // Floor at 0 — a bad "set to" value should never drive stock negative silently.
+    const clampedQty = Math.max(0, parseFloat(quantity) || 0);
+
     const updated = await fetchFromSupabase(`${table}?id=eq.${id}`, {
       method: 'PATCH',
       body: JSON.stringify({
-        [updateField]: parseFloat(quantity),
+        [updateField]: clampedQty,
         updated_at: new Date().toISOString()
       })
     });

@@ -3,6 +3,7 @@ import { fetchFromSupabase } from '@/lib/supabase';
 import { verifySession } from '@/lib/session';
 import {
   addDays,
+  alignedFirstDelivery,
   deliversOnTuesday,
   effectiveGrowDays,
   localMidnight,
@@ -112,7 +113,11 @@ export async function GET(request: NextRequest) {
         const d = effectiveGrowDays(c, procMap, mixComponentsMap);
         if (d > maxGrowDays) maxGrowDays = d;
       }
-      return targetDate; // legacy row fallback: assume it's due
+      // Legacy row without next_delivery_date: derive its real first
+      // delivery from the order event. The old `return targetDate` fallback
+      // made such a row "due" on EVERY date ever queried — the driver view
+      // showed it week after week regardless of its actual cadence.
+      return alignedFirstDelivery(createdAt, maxGrowDays || 10);
     };
 
     const lines = (activeOrders || []).filter((o: any) => custMap.get(o.customer_id)?.name);
@@ -121,7 +126,7 @@ export async function GET(request: NextRequest) {
       const variant = varMap.get(order.product_variant_id);
       const crop = variant ? cropMap.get(variant.crop_id) : null;
       const qty = order.quantity || 1;
-      const priceEur = variant?.price_eur ?? 0;
+      const priceEur = order.price_at_time_eur ?? variant?.price_eur ?? 0;
       const confirmedRow = confirmedByOrderId.get(order.id);
       return {
         order_id: order.id,

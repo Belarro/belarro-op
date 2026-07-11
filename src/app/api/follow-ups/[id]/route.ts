@@ -102,6 +102,15 @@ export async function PUT(request: NextRequest, props: Params) {
       return NextResponse.json({ success: true, message: 'Channel recorded' });
     }
 
+    // Idempotency guard: a double-click, slow-network retry, or the widget
+    // and the main follow-ups page both acting on the same row would
+    // otherwise re-run the "advance next stage" logic below every time,
+    // pushing the next stage's due date further out from "now" on each call
+    // — silently delaying (or never reaching) a lead's next touch. Once this
+    // stage is already completed/sent, re-marking it doesn't re-advance.
+    const beforeUpdate = await fetchFromSupabase(`/belarro_v4_follow_up?id=eq.${id}&select=status`);
+    const alreadyDone = beforeUpdate?.[0] && ['completed', 'sent'].includes(beforeUpdate[0].status);
+
     // Mark this stage as completed
     await fetchFromSupabase(`/belarro_v4_follow_up?id=eq.${id}`, {
       method: 'PATCH',
@@ -115,7 +124,7 @@ export async function PUT(request: NextRequest, props: Params) {
     });
 
     // Recalculate next stage due date from actual sent time (not for replied — that's manual)
-    if (status === 'completed' || status === 'sent') {
+    if (!alreadyDone && (status === 'completed' || status === 'sent')) {
       // Get this follow-up to find location_id and stage
       const current = await fetchFromSupabase(`/belarro_v4_follow_up?id=eq.${id}&select=*`);
       if (current && current.length > 0) {

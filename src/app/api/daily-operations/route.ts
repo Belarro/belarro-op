@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
     const [orders, standingOrders, standingItems, variants, crops, procedures, mixComponents] = await Promise.all([
       fetchFromSupabase('/belarro_v4_order?status=in.(active,pending_seed,growing)&deleted_at=is.null&select=*'),
       fetchFromSupabase('/belarro_v4_standing_order?status=eq.active&select=id,customer_id'),
-      fetchFromSupabase('/belarro_v4_standing_order_item?select=*'),
+      fetchFromSupabase('/belarro_v4_standing_order_item?deleted_at=is.null&select=*'),
       fetchFromSupabase('/belarro_v4_product_variant?select=*'),
       fetchFromSupabase('/belarro_v4_crop?select=*'),
       fetchFromSupabase('/belarro_v4_growth_procedure?select=*'), // select=* already includes _enabled columns

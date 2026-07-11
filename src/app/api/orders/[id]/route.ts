@@ -3,6 +3,7 @@ import { fetchFromSupabase } from '@/lib/supabase';
 import { logError } from '@/lib/logger';
 import {
   addDays,
+  alignedFirstDelivery,
   effectiveGrowDays,
   lastDeliveryAfterStop,
   ymd,
@@ -118,6 +119,7 @@ export async function PUT(request: NextRequest, props: Params) {
           quantity: body.quantity !== undefined ? parseFloat(String(body.quantity)) : oldLine.quantity,
           order_date: new Date().toISOString(),
           next_delivery_date: `${ymd(handover)}T00:00:00+02:00`,
+          price_at_time_eur: newVariant?.price_eur ?? 0,
           status: 'active',
           recurring: true,
           frequency: body.frequency || oldLine.frequency || 'weekly',
@@ -131,14 +133,47 @@ export async function PUT(request: NextRequest, props: Params) {
       });
     }
 
+    // ── RESUME FROM PAUSE ────────────────────────────────────────────
+    // Reactivating a paused line with its old next_delivery_date left in
+    // place can point at a date long past (line was paused for weeks),
+    // making it look immediately due — or skip a full cadence cycle,
+    // depending on the stale date's weekday offset. Re-anchor the same way
+    // a brand-new order is aligned: from today, by this line's own grow days.
+    let patchBody = body;
+    if (body.status === 'active') {
+      const current = await fetchFromSupabase(`/belarro_v4_order?id=eq.${id}&select=*`);
+      const currentLine = current && current[0];
+      if (currentLine && currentLine.status === 'paused') {
+        const [variants, crops, procedures, mixComponents] = await Promise.all([
+          fetchFromSupabase('/belarro_v4_product_variant?select=*'),
+          fetchFromSupabase('/belarro_v4_crop?select=*'),
+          fetchFromSupabase('/belarro_v4_growth_procedure?select=crop_id,stack_days,stack_enabled,blackout_days,blackout_enabled,light_days,light_enabled'),
+          fetchFromSupabase('/belarro_v4_crop_mix_component?select=*'),
+        ]);
+        const varMap = new Map<string, any>((variants || []).map((v: any) => [v.id, v]));
+        const cropMap = new Map<string, any>((crops || []).map((c: any) => [c.id, c]));
+        const procMap = new Map<string, any>((procedures || []).map((p: any) => [p.crop_id, p]));
+        const mixComponentsMap = new Map<string, any[]>();
+        for (const mc of (mixComponents || [])) {
+          if (!mixComponentsMap.has(mc.mix_crop_id)) mixComponentsMap.set(mc.mix_crop_id, []);
+          mixComponentsMap.get(mc.mix_crop_id)!.push(mc);
+        }
+        const variant = varMap.get(currentLine.product_variant_id);
+        const crop = variant ? cropMap.get(variant.crop_id) : null;
+        const growDays = effectiveGrowDays(crop, procMap, mixComponentsMap) || 10;
+        const resumeDelivery = alignedFirstDelivery(new Date(), growDays);
+        patchBody = { ...body, next_delivery_date: `${ymd(resumeDelivery)}T00:00:00+02:00` };
+      }
+    }
+
     const order = await fetchFromSupabase(`/belarro_v4_order?id=eq.${id}`, {
       method: 'PATCH',
-      body: JSON.stringify(body),
+      body: JSON.stringify(patchBody),
     });
 
     return NextResponse.json({
       success: true,
-      data: order ? order[0] : body,
+      data: order ? order[0] : patchBody,
       message: 'Order updated successfully',
     });
   } catch (error) {

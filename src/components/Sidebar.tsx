@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 import {
   DashboardIcon,
   LeafIcon,
@@ -70,8 +69,10 @@ export default function Sidebar() {
   useEffect(() => { setOpen(false); }, [pathname]);
 
   async function handleLogout() {
-    const supabase = createSupabaseBrowserClient();
-    await supabase.auth.signOut();
+    // Clear the real belarro_session cookie server-side. The previous
+    // supabase.auth.signOut() was a no-op — the app's session was never a
+    // Supabase Auth session, so "Sign out" left the user fully logged in.
+    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
     router.refresh();
     router.replace('/login');
   }

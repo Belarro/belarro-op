@@ -60,6 +60,9 @@ export async function PUT(request: NextRequest) {
       const existing = await fetchFromSupabase(`/belarro_v4_packaging_stock?id=eq.${id}&select=quantity`);
       if (existing && existing.length > 0) newQty = (existing[0].quantity || 0) + newQty;
     }
+    // Floor at 0 — a negative delta or a bad "set to" value should never
+    // drive stock below zero silently.
+    newQty = Math.max(0, newQty);
 
     const updated = await fetchFromSupabase(`/belarro_v4_packaging_stock?id=eq.${id}`, {
       method: 'PATCH',

@@ -1,14 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchFromSupabase } from '@/lib/supabase';
-// import removed
-
-function isoWeek(d: Date): number {
-  const tmp = new Date(d);
-  tmp.setHours(0, 0, 0, 0);
-  tmp.setDate(tmp.getDate() + 3 - ((tmp.getDay() + 6) % 7));
-  const week1 = new Date(tmp.getFullYear(), 0, 4);
-  return 1 + Math.round(((tmp.getTime() - week1.getTime()) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
-}
+import { deliversOnTuesday, localMidnight, nextTuesdayOnOrAfter, ymd } from '@/lib/seeding';
 
 function tuesdaysInMonth(year: number, month: number): Date[] {
   const tuesdays: Date[] = [];
@@ -45,7 +37,12 @@ interface DeliveryStats {
   grams: number;    // total grams (for kg display)
 }
 
-function calcDeliveries(
+// Forward-looking projection from live order config — used only for Tuesdays
+// that haven't happened yet (next delivery, remainder of this month). Skips
+// any Tuesday before the order's own first delivery so a brand-new order
+// doesn't get multiplied across weeks it couldn't have delivered in.
+// Standing-order lines (is_standing) deliver every Tuesday unconditionally.
+function calcProjected(
   tuesdays: Date[],
   orders: any[],
   varMap: Map<string, any>,
@@ -56,33 +53,69 @@ function calcDeliveries(
   let packages = 0;
   let grams = 0;
 
-  for (const tuesday of tuesdays) {
-    const weekNum = isoWeek(tuesday);
-    for (const order of orders) {
-      if (order.status === 'paused' || order.status === 'cancelled') continue;
-      if (order.frequency === 'biweekly' && weekNum % 2 !== 0) continue;
+  for (const order of orders) {
+    if (order.status === 'paused' || order.status === 'cancelled') continue;
 
-      const variant = varMap.get(order.product_variant_id);
-      if (!variant) continue;
-      const crop = cropMap.get(variant.crop_id);
-      if (!crop) continue;
+    const variant = varMap.get(order.product_variant_id);
+    if (!variant) continue;
+    const crop = cropMap.get(variant.crop_id);
+    if (!crop) continue;
 
-      const qty = order.quantity || 1;
-      const price = variant.price_eur || 0;
+    const qty = order.quantity || 1;
+    const price = order.price_at_time_eur ?? variant.price_eur ?? 0;
+    const proc = procMap.get(crop.id);
+    const weightPerUnit = parseWeightFromSize(variant.size_name, proc);
+
+    if (order.is_standing) {
+      for (const _tuesday of tuesdays) {
+        revenue += qty * price;
+        packages += qty;
+        grams += qty * weightPerUnit;
+      }
+      continue;
+    }
+
+    if (!order.next_delivery_date) continue;
+    const firstDelivery = nextTuesdayOnOrAfter(new Date(order.next_delivery_date));
+
+    for (const tuesday of tuesdays) {
+      if (!deliversOnTuesday(tuesday, firstDelivery, order.frequency, order.recurring)) continue;
       revenue += qty * price;
       packages += qty;
-
-      // grams: qty × package weight from size_name (e.g. "225g" → 225)
-      const proc = procMap.get(crop.id);
-      const weightPerUnit = parseWeightFromSize(variant.size_name, proc);
       grams += qty * weightPerUnit;
     }
   }
 
+  return { revenue: +revenue.toFixed(2), packages, grams };
+}
+
+// Ground truth for Tuesdays that have already happened — reads the
+// immutable delivery ledger (what was actually confirmed delivered), not
+// live order/price config. Matches /api/invoices/generate's source so the
+// dashboard and invoices can never silently disagree about the past.
+function calcFromLedger(deliveries: any[]): DeliveryStats {
+  let revenue = 0;
+  let packages = 0;
+  let grams = 0;
+
+  for (const d of deliveries) {
+    if (d.status === 'not_delivered') continue;
+    const qty = d.actual_qty ?? d.expected_qty ?? 1;
+    const price = d.unit_price_eur ?? 0;
+    revenue += qty * price;
+    packages += qty;
+    const match = (d.size_name || '').match(/(\d+)\s*g/i);
+    grams += qty * (match ? parseInt(match[1]) : 0);
+  }
+
+  return { revenue: +revenue.toFixed(2), packages, grams };
+}
+
+function addStats(a: DeliveryStats, b: DeliveryStats): DeliveryStats {
   return {
-    revenue: +revenue.toFixed(2),
-    packages,
-    grams,
+    revenue: +(a.revenue + b.revenue).toFixed(2),
+    packages: a.packages + b.packages,
+    grams: a.grams + b.grams,
   };
 }
 
@@ -97,25 +130,37 @@ function parseWeightFromSize(sizeName: string, proc: any): number {
 
 export async function GET(request: NextRequest) {
   try {
-    // For now, skip auth check — rely on deployment being private
-    // TODO: restore session-based auth once cookie handling is fixed on Vercel
     // auth handled by middleware
-    // if (!auth.ok) return auth.response;
 
-    const today = new Date();
+    const today = localMidnight(new Date());
     const thisYear = today.getFullYear();
     const thisMonth = today.getMonth() + 1;
 
-    const [crops, customers, orders, variants, procs, batches, harvests, seedInv, packageInv] = await Promise.all([
+    const monthTuesdaysAll = tuesdaysInMonth(thisYear, thisMonth);
+    const monthPastTuesdays = monthTuesdaysAll.filter(t => t.getTime() <= today.getTime());
+    const monthFutureTuesdays = monthTuesdaysAll.filter(t => t.getTime() > today.getTime());
+    const allPastTuesdaysList = allPastTuesdays(2026, 1);
+
+    const [crops, customers, orders, standingOrders, standingItems, variants, procs, batches, harvests, seedInv, packageInv, allTimeDeliveries] = await Promise.all([
       fetchFromSupabase('/belarro_v4_crop?select=id,status,deleted_at,name_en'),
       fetchFromSupabase('/belarro_v4_customer?deleted_at=is.null&select=id,name,restaurant_name,status,created_at'),
       fetchFromSupabase('/belarro_v4_order?deleted_at=is.null&select=*'),
+      fetchFromSupabase('/belarro_v4_standing_order?status=eq.active&select=id,customer_id').catch(() => []),
+      fetchFromSupabase('/belarro_v4_standing_order_item?deleted_at=is.null&select=*').catch(() => []),
       fetchFromSupabase('/belarro_v4_product_variant?select=id,price_eur,size_name,crop_id'),
       fetchFromSupabase('/belarro_v4_processing_step?select=*').catch(() => []),
       fetchFromSupabase('/belarro_v4_seeding_batch?select=id').catch(() => []),
       fetchFromSupabase('/belarro_v4_harvest_record?select=seeding_batch_id').catch(() => []),
       fetchFromSupabase('/belarro_v4_seed_inventory?select=*,crop:belarro_v4_crop(*)').catch(() => []),
       fetchFromSupabase('/belarro_v4_package_inventory?select=*').catch(() => []),
+      // Ground truth for every past Tuesday since farm start — same ledger
+      // /api/invoices/generate reads, so dashboard revenue can't silently
+      // diverge from what customers are actually billed.
+      allPastTuesdays(2026, 1).length > 0
+        ? fetchFromSupabase(
+            `/belarro_v4_delivery?delivery_date=gte.${ymd(allPastTuesdays(2026, 1)[0])}&deleted_at=is.null&select=*`
+          ).catch(() => [])
+        : Promise.resolve([]),
     ]);
 
     const nonDeletedCrops = (crops || []).filter((c: any) => !c.deleted_at);
@@ -130,21 +175,49 @@ export async function GET(request: NextRequest) {
 
     const ords = (orders || []);
 
-    // Active orders only (not paused/cancelled)
-    const liveOrders = ords.filter((o: any) => o.status !== 'cancelled' && o.status !== 'paused');
+    // Standing orders deliver every week — fold them into the forward
+    // projection alongside one-time orders (they were previously invisible
+    // to the dashboard entirely, same gap as Production had).
+    const standingOrderCustomer = new Map<string, string>((standingOrders || []).map((so: any) => [so.id, so.customer_id]));
+    const standingLines = (standingItems || [])
+      .map((it: any) => ({
+        id: `standing:${it.id}`,
+        customer_id: standingOrderCustomer.get(it.standing_order_id),
+        product_variant_id: it.variant_id,
+        quantity: it.quantity,
+        price_at_time_eur: it.price_at_time_eur,
+        is_standing: true,
+      }))
+      .filter((l: any) => l.customer_id);
 
-    // Monthly deliveries: all Tuesdays this month up to today
-    const monthTuesdays = tuesdaysInMonth(thisYear, thisMonth).filter(t => t <= today);
-    const monthStats = calcDeliveries(monthTuesdays, liveOrders, varMap, cropMap, procMap);
+    // Active orders only (not paused/cancelled) — used for future projection only.
+    const liveOrders = [
+      ...ords.filter((o: any) => o.status !== 'cancelled' && o.status !== 'paused'),
+      ...standingLines,
+    ];
 
-    // All-time deliveries: from Jan 2026 (farm start) to today
-    const allTuesdays = allPastTuesdays(2026, 1);
-    const allTimeStats = calcDeliveries(allTuesdays, liveOrders, varMap, cropMap, procMap);
+    const ledgerRows = allTimeDeliveries || [];
+    const ledgerByDate = new Map<string, any[]>();
+    for (const d of ledgerRows) {
+      if (!ledgerByDate.has(d.delivery_date)) ledgerByDate.set(d.delivery_date, []);
+      ledgerByDate.get(d.delivery_date)!.push(d);
+    }
+    const ledgerRowsInRange = (tuesdays: Date[]) =>
+      tuesdays.flatMap(t => ledgerByDate.get(ymd(t)) || []);
 
-    // Next Tuesday's expected revenue (forward-looking, 1 week)
-    const nextTuesdayDate = new Date(today);
-    while (nextTuesdayDate.getDay() !== 2) nextTuesdayDate.setDate(nextTuesdayDate.getDate() + 1);
-    const nextWeekStats = calcDeliveries([nextTuesdayDate], liveOrders, varMap, cropMap, procMap);
+    // This month: ledger for Tuesdays that already happened, live projection
+    // for the rest of the month.
+    const monthPastStats = calcFromLedger(ledgerRowsInRange(monthPastTuesdays));
+    const monthFutureStats = calcProjected(monthFutureTuesdays, liveOrders, varMap, cropMap, procMap);
+    const monthStats = addStats(monthPastStats, monthFutureStats);
+
+    // All-time: ledger only — every one of these Tuesdays is in the past by definition.
+    const allTimeStats = calcFromLedger(ledgerRowsInRange(allPastTuesdaysList));
+
+    // Next Tuesday's expected revenue (forward-looking, 1 week) — always a
+    // projection since it hasn't happened yet.
+    const nextTuesdayDate = nextTuesdayOnOrAfter(today);
+    const nextWeekStats = calcProjected([nextTuesdayDate], liveOrders, varMap, cropMap, procMap);
 
     // Active operations
     const bts = batches || [];
@@ -158,10 +231,13 @@ export async function GET(request: NextRequest) {
       f.status === 'pending' && new Date(f.due_date) <= todayEnd
     ).length;
 
-    // Reorder alerts
+    // Reorder alerts. seeds_per_tray lives on belarro_v4_seed_inventory (the
+    // field the Inventory page edits) — the crop row has seeds_per_tray_grams;
+    // reading inv.crop.seeds_per_tray was always undefined, silently pinning
+    // every crop's alert math to the 60g fallback.
     const seedReorderAlerts = (seedInv || []).filter((inv: any) => {
       if (!inv.crop) return false;
-      const remainingTrays = Math.floor(inv.quantity_grams / (inv.crop.seeds_per_tray || 60));
+      const remainingTrays = Math.floor(inv.quantity_grams / (inv.seeds_per_tray || inv.crop.seeds_per_tray_grams || 60));
       return remainingTrays < (inv.reorder_threshold_trays || 20);
     }).length;
     const packageReorderAlerts = (packageInv || []).filter(
@@ -180,7 +256,7 @@ export async function GET(request: NextRequest) {
         },
         this_month: {
           label: today.toLocaleDateString('en-DE', { month: 'long', year: 'numeric' }),
-          deliveries: monthTuesdays.length,
+          deliveries: monthPastTuesdays.length,
           revenue: monthStats.revenue,
           packages: monthStats.packages,
           kg: +(monthStats.grams / 1000).toFixed(1),
@@ -189,10 +265,10 @@ export async function GET(request: NextRequest) {
           revenue: allTimeStats.revenue,
           packages: allTimeStats.packages,
           kg: +(allTimeStats.grams / 1000).toFixed(1),
-          deliveries: allTuesdays.length,
+          deliveries: allPastTuesdaysList.length,
         },
         next_delivery: {
-          date: nextTuesdayDate.toISOString().split('T')[0],
+          date: ymd(nextTuesdayDate),
           revenue: nextWeekStats.revenue,
           packages: nextWeekStats.packages,
         },

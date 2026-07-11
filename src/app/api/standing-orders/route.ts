@@ -10,12 +10,17 @@ import { fetchFromSupabase } from '@/lib/supabase';
  * GET    /api/standing-orders      -> all standing orders, hydrated w/ customer + items
  * POST   /api/standing-orders      -> create { customer_id, status, notes, items: [...] }
  * PUT    /api/standing-orders      -> update { id, status?, notes?, items? } (items replaced)
- * DELETE /api/standing-orders      -> hard delete by id (items cascade)
+ * DELETE /api/standing-orders      -> soft delete by id (items soft-deleted too)
+ *
+ * belarro_v4_standing_order and belarro_v4_standing_order_item have a
+ * BEFORE DELETE trigger in the DB that raises on any hard DELETE (Data
+ * Protection Mandate) — the previous hard-DELETE calls here threw every
+ * time, so deleting a standing order or editing its items was broken.
  */
 
 async function loadItems(standingOrderId: string) {
   return fetchFromSupabase(
-    `/belarro_v4_standing_order_item?standing_order_id=eq.${standingOrderId}&select=*&order=created_at.asc`
+    `/belarro_v4_standing_order_item?standing_order_id=eq.${standingOrderId}&deleted_at=is.null&select=*&order=created_at.asc`
   );
 }
 
@@ -47,13 +52,13 @@ export async function GET(request: NextRequest) {
     // if (!auth.ok) return auth.response;
 
     const orders = await fetchFromSupabase(
-      `/belarro_v4_standing_order?select=*&order=created_at.desc`
+      `/belarro_v4_standing_order?deleted_at=is.null&select=*&order=created_at.desc`
     );
     const customers = await fetchFromSupabase(
       `/belarro_v4_customer?select=id,name,restaurant_name`
     );
     const items = await fetchFromSupabase(
-      `/belarro_v4_standing_order_item?select=*`
+      `/belarro_v4_standing_order_item?deleted_at=is.null&select=*`
     );
 
     const custMap = new Map<string, any>((customers || []).map((c: any) => [c.id, c]));
@@ -163,11 +168,12 @@ export async function PUT(request: NextRequest) {
       body: JSON.stringify(updateData),
     });
 
-    // If items provided, replace them wholesale.
+    // If items provided, replace them wholesale (soft-delete the old rows —
+    // the table has a no-hard-delete trigger, a real DELETE here throws).
     if (Array.isArray(items)) {
       await fetchFromSupabase(
-        `/belarro_v4_standing_order_item?standing_order_id=eq.${id}`,
-        { method: 'DELETE' }
+        `/belarro_v4_standing_order_item?standing_order_id=eq.${id}&deleted_at=is.null`,
+        { method: 'PATCH', body: JSON.stringify({ deleted_at: new Date().toISOString() }) }
       );
       await insertItems(id, items);
     }
@@ -205,9 +211,17 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Items cascade via FK ON DELETE CASCADE.
+    // Soft delete (Data Protection Mandate) — the table's no-hard-delete
+    // trigger would reject a real DELETE anyway. Items are soft-deleted too
+    // since there's no cascade on a soft delete.
+    const deletedAt = new Date().toISOString();
     await fetchFromSupabase(`/belarro_v4_standing_order?id=eq.${id}`, {
-      method: 'DELETE',
+      method: 'PATCH',
+      body: JSON.stringify({ deleted_at: deletedAt }),
+    });
+    await fetchFromSupabase(`/belarro_v4_standing_order_item?standing_order_id=eq.${id}&deleted_at=is.null`, {
+      method: 'PATCH',
+      body: JSON.stringify({ deleted_at: deletedAt }),
     });
 
     return NextResponse.json({ success: true, data: { id } });

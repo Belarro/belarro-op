@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchFromSupabase } from '@/lib/supabase';
+import { growDaysFromProc } from '@/lib/seeding';
 // import removed
 
 export async function GET(request: NextRequest) {
@@ -94,22 +95,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Fetch crop growth days
+    // Fetch crop growth days — same formula as /api/production and every
+    // other seeding-adjacent route (lib/seeding.ts's growDaysFromProc),
+    // rather than a separately reimplemented (and diverging) calculation.
     const procedure = await fetchFromSupabase(`/belarro_v4_growth_procedure?crop_id=eq.${crop_id}&select=*`);
-    let growthDays = 10;
-    if (procedure && procedure.length > 0) {
-      const p = procedure[0];
-      const lightsDays = p.light_enabled ? (p.light_days || 0) : 0;
-      let envDays = 0;
-      if (lightsDays > 0) {
-        envDays = lightsDays;
-      } else if (p.blackout_enabled && p.blackout_days) {
-        envDays = p.blackout_days;
-      } else {
-        envDays = p.growth_env_days || 0;
-      }
-      growthDays = (p.stack_enabled ? (p.stack_days || 0) : 0) + envDays;
-    }
+    const growthDays = (procedure && procedure.length > 0 ? growDaysFromProc(procedure[0]) : 0) || 10;
 
     const seedingDateObj = new Date(seeding_date);
     const expectedHarvestDate = new Date(seedingDateObj);
@@ -130,17 +120,20 @@ export async function POST(request: NextRequest) {
       })
     });
 
-    // Deduct seeds from inventory
+    // Deduct seeds from inventory — using each crop's actual configured
+    // seed rate (belarro_v4_seed_inventory.seeds_per_tray), not a flat 60g
+    // default that over/under-deducts any crop not actually seeded at 60g/tray.
+    let seedsUsedGrams = 0;
     try {
       const seedInv = await fetchFromSupabase(`/belarro_v4_seed_inventory?crop_id=eq.${crop_id}&select=*`);
       if (seedInv && seedInv.length > 0) {
         const inv = seedInv[0];
-        const seedsPerTray = 60; // 60g default
-        const seedsNeeded = parseInt(quantity_trays) * seedsPerTray;
+        const seedsPerTray = inv.seeds_per_tray || 60;
+        seedsUsedGrams = parseInt(quantity_trays) * seedsPerTray;
         await fetchFromSupabase(`/belarro_v4_seed_inventory?id=eq.${inv.id}`, {
           method: 'PATCH',
           body: JSON.stringify({
-            quantity_grams: Math.max(0, inv.quantity_grams - seedsNeeded)
+            quantity_grams: Math.max(0, inv.quantity_grams - seedsUsedGrams)
           })
         });
       }
@@ -155,7 +148,7 @@ export async function POST(request: NextRequest) {
         body: JSON.stringify({
           id: crypto.randomUUID(),
           crop_id,
-          quantity_used_grams: parseInt(quantity_trays) * 60,
+          quantity_used_grams: seedsUsedGrams,
           trays_seeded: parseInt(quantity_trays),
           seeded_date: seedingDateObj.toISOString()
         })

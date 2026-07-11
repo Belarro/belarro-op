@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchFromSupabase } from '@/lib/supabase';
+import { localMidnight, nextTuesdayOnOrAfter, ymd } from '@/lib/seeding';
 // import removed
 
 export async function POST(request: NextRequest) {
@@ -7,7 +8,8 @@ export async function POST(request: NextRequest) {
     // auth handled by middleware
     // if (!auth.ok) return auth.response;
     const body = await request.json();
-    const { seeding_batch_id, harvest_date, actual_yield_grams, notes, order_ids } = body;
+    const { seeding_batch_id, harvest_date, actual_yield_grams, notes } = body;
+    let { order_ids } = body;
 
     if (!seeding_batch_id || !harvest_date || actual_yield_grams === undefined) {
       return NextResponse.json(
@@ -26,9 +28,27 @@ export async function POST(request: NextRequest) {
     }
     const batchData = batch[0];
 
+    // If the caller (Production UI) didn't say which orders this batch
+    // fulfills, resolve it ourselves: any active order for this crop whose
+    // next delivery is this batch's harvest Tuesday. Previously the UI
+    // always sent order_ids: [], so every harvest silently routed 100% to
+    // sample inventory and real orders never advanced past "growing."
+    if (!order_ids || !Array.isArray(order_ids) || order_ids.length === 0) {
+      const harvestTuesday = ymd(nextTuesdayOnOrAfter(localMidnight(new Date(harvest_date))));
+      const [orders, variants] = await Promise.all([
+        fetchFromSupabase("/belarro_v4_order?status=in.(active,pending_seed,growing)&deleted_at=is.null&select=*"),
+        fetchFromSupabase('/belarro_v4_product_variant?select=id,crop_id'),
+      ]);
+      const variantIdsForCrop = new Set((variants || []).filter((v: any) => v.crop_id === batchData.crop_id).map((v: any) => v.id));
+      order_ids = (orders || [])
+        .filter((o: any) => variantIdsForCrop.has(o.product_variant_id))
+        .filter((o: any) => o.next_delivery_date && ymd(nextTuesdayOnOrAfter(new Date(o.next_delivery_date))) === harvestTuesday)
+        .map((o: any) => o.id);
+    }
+
     // Simple allocation: allocate to orders first, remainder to samples
     let allocatedToOrders = 0;
-    
+
     // Fetch orders if order_ids are provided
     if (order_ids && Array.isArray(order_ids) && order_ids.length > 0) {
       // Calculate total order grams needed

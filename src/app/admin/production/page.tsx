@@ -225,10 +225,14 @@ export default function ProductionPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           seeding_batch_id: harvestModal.id,
-          harvest_date: new Date().toISOString().split('T')[0],
+          // Local (Berlin) calendar day — toISOString() takes the UTC date,
+          // misfiling harvests logged late at night to the previous day.
+          harvest_date: new Date().toLocaleDateString('sv'),
           actual_yield_grams: parseFloat(harvestForm.actual_yield_grams) || 0,
           notes: harvestForm.notes,
-          order_ids: [],
+          // order_ids omitted: /api/harvest resolves which active orders
+          // this batch fulfills server-side. Sending [] here routed 100% of
+          // every harvest to sample inventory and left orders stuck "growing".
         }),
       });
       const json = await res.json();

@@ -111,7 +111,11 @@ export async function POST(request: NextRequest) {
       size_name: variantData?.size_name || null,
       expected_qty: expectedQty,
       actual_qty: resolvedActualQty,
-      unit_price_eur: variantData?.price_eur ?? 0,
+      // Prefer the price snapshotted on the order at creation/swap time —
+      // resolving the live variant price here meant a price edit between
+      // order creation and delivery confirmation silently changed what got
+      // written into the immutable ledger (and re-confirming re-read it again).
+      unit_price_eur: orderData.price_at_time_eur ?? variantData?.price_eur ?? 0,
       status,
       note: note || null,
       confirmed_by: confirmed_by || null,
