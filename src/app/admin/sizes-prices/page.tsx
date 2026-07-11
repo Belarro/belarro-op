@@ -53,6 +53,8 @@ export default function SizesPricesPage() {
 
   const startEdit = (v: Variant) => {
     setEditingId(v.id);
+    setAddingFor(null);
+    setNewVariant({ size_name: '', size_grams: '', price_eur: '' });
     setDraft({
       size_name: v.size_name,
       size_grams: String(v.size_grams),
@@ -73,8 +75,13 @@ export default function SizesPricesPage() {
         }),
       });
       const json = await res.json();
-      if (json.success) { flash('Saved'); setEditingId(null); fetchData(); }
-      else flash(`Error: ${json.error}`);
+      if (json.success) {
+        flash('Saved');
+        setEditingId(null);
+        setAddingFor(null);
+        setNewVariant({ size_name: '', size_grams: '', price_eur: '' });
+        fetchData();
+      } else flash(`Error: ${json.error}`);
     } catch (e) { console.error(e); }
   };
 
