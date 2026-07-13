@@ -81,9 +81,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, message: 'Request rejected' });
     }
 
-    // Approve: create user with a default password (user must change on first login)
-    const tempPassword = Math.random().toString(36).slice(-12); // Temporary password
-    const password_hash = await bcrypt.hash(tempPassword, 10);
+    // Approve: create approval token (user will set their own password)
+    const approvalToken = Math.random().toString(36).slice(-16) + Date.now().toString(36);
 
     const existing = await fetchFromSupabase(
       `/admin_users?select=id,deleted_at`
@@ -91,52 +90,33 @@ export async function POST(request: NextRequest) {
 
     if (Array.isArray(existing) && existing.length > 0) {
       const userExists = existing.find(u => u.email?.toLowerCase?.() === joinRequest.email.toLowerCase());
-      if (userExists) {
-        if (!userExists.deleted_at) {
-          return NextResponse.json(
-            { success: false, error: 'User already exists' },
-            { status: 409 }
-          );
-        }
-        // Reactivate soft-deleted user
-        await fetchFromSupabase(`/admin_users?id=eq.${userExists.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify({
-            password_hash,
-            name: joinRequest.name || null,
-            role: 'field',
-            deleted_at: null,
-          }),
-        });
+      if (userExists && !userExists.deleted_at) {
+        return NextResponse.json(
+          { success: false, error: 'User already exists' },
+          { status: 409 }
+        );
       }
-    } else {
-      // Create new user
-      await fetchFromSupabase('/admin_users', {
-        method: 'POST',
-        body: JSON.stringify({
-          email: joinRequest.email,
-          password_hash,
-          name: joinRequest.name || null,
-          role: 'field',
-        }),
-      });
     }
 
-    // Mark request as approved
+    // Store approval token in user_join_requests (user can set password within 24 hours)
     await fetchFromSupabase(`/user_join_requests?id=eq.${encodeURIComponent(id)}`, {
       method: 'PATCH',
       body: JSON.stringify({
         status: 'approved',
+        approval_token: approvalToken,
         reviewed_at: new Date().toISOString(),
+        approved_until: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       }),
     });
 
+    const setPasswordLink = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/set-password?token=${approvalToken}&email=${encodeURIComponent(joinRequest.email)}`;
+
     return NextResponse.json({
       success: true,
-      message: 'User approved and created',
+      message: 'User approved',
       data: {
         email: joinRequest.email,
-        tempPassword, // Return so admin can send it to user
+        setPasswordLink, // Send this to user via email
       },
     });
   } catch (error) {

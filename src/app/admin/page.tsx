@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { JoinRequestsWidget } from '@/components/JoinRequestsWidget';
 
 interface DashboardData {
   overview: {
@@ -69,6 +70,9 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
+      {/* Join requests widget */}
+      <JoinRequestsWidget />
+
       {/* Follow-up banner */}
       {data.operations.pending_follow_ups > 0 && (
         <Link href="/admin/follow-ups" className="block bg-green-600 hover:bg-green-700 text-white rounded-xl px-6 py-4 flex items-center justify-between transition">
