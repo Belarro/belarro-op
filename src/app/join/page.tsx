@@ -25,14 +25,17 @@ export default function JoinPage() {
       const data = await res.json();
 
       if (!res.ok) {
+        console.error('Join request failed:', { status: res.status, data });
         setError(data.error || 'Failed to submit request');
         return;
       }
 
+      console.log('Join request succeeded:', data);
       setSubmitted(true);
       setEmail('');
       setName('');
     } catch (err) {
+      console.error('Join request error:', err);
       setError('Connection error. Please try again.');
     } finally {
       setLoading(false);
