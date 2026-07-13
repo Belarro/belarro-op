@@ -10,9 +10,15 @@ import { fetchFromSupabase } from '@/lib/supabase';
  */
 export async function POST(request: NextRequest) {
   try {
-    const { email, name } = await request.json();
+    console.log('[join-request] Received POST request');
+
+    const body = await request.json();
+    console.log('[join-request] Body:', { email: body.email, hasName: !!body.name });
+
+    const { email, name } = body;
 
     if (!email) {
+      console.log('[join-request] Email missing');
       return NextResponse.json(
         { success: false, error: 'Email is required' },
         { status: 400 }
@@ -20,6 +26,7 @@ export async function POST(request: NextRequest) {
     }
 
     const emailLower = email.toLowerCase();
+    console.log('[join-request] Processing email:', emailLower);
 
     // Check if user already exists
     const existing = await fetchFromSupabase(
@@ -73,9 +80,11 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    console.error('Join request error:', error);
+    console.error('[join-request] Error:', error);
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error('[join-request] Error details:', errorMsg);
     return NextResponse.json(
-      { success: false, error: 'Failed to submit join request' },
+      { success: false, error: `Failed to submit join request: ${errorMsg}` },
       { status: 500 }
     );
   }
