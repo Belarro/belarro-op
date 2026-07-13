@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     }
 
     const users = await fetchFromSupabase(
-      `/admin_users?email=eq.${encodeURIComponent(email)}&select=id,email,password_hash,role,deleted_at`
+      `/admin_users?select=id,email,password_hash,role,deleted_at`
     );
 
     if (!Array.isArray(users) || users.length === 0) {
@@ -55,7 +55,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = users[0];
+    const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid email or password' },
+        { status: 401 }
+      );
+    }
     if (user.deleted_at) {
       return NextResponse.json(
         { success: false, error: 'Invalid email or password' },
