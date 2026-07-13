@@ -121,23 +121,34 @@ export function JoinRequestsWidget() {
       )}
 
       {setPasswordLink && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-3 space-y-2">
-          <p className="text-green-800 font-semibold text-sm">✓ Approved! Share this link:</p>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={setPasswordLink}
-              readOnly
-              className="flex-1 px-3 py-2 text-xs bg-white border border-green-300 rounded font-mono overflow-hidden"
-            />
-            <button
-              onClick={() => copyToClipboard(setPasswordLink)}
-              className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded transition"
-            >
-              Copy
-            </button>
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 space-y-3">
+          <p className="text-green-800 font-semibold text-sm">✓ Approved!</p>
+          <div className="space-y-2">
+            <p className="text-green-700 text-xs font-semibold">Setup link (24-hour expiry):</p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={setPasswordLink}
+                readOnly
+                className="flex-1 px-3 py-2 text-xs bg-white border border-green-300 rounded font-mono break-all"
+              />
+              <button
+                onClick={() => copyToClipboard(setPasswordLink)}
+                className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded transition whitespace-nowrap"
+              >
+                Copy
+              </button>
+            </div>
+            {showCopyNotice && <p className="text-xs text-green-700">✓ Copied!</p>}
           </div>
-          {showCopyNotice && <p className="text-xs text-green-700">✓ Copied to clipboard</p>}
+          <div className="bg-green-100 rounded p-2 text-xs text-green-800">
+            <p className="font-semibold mb-1">📧 Next steps:</p>
+            <ol className="list-decimal list-inside space-y-1">
+              <li>Copy the link above</li>
+              <li>Send to user via email or chat</li>
+              <li>User clicks link → sets password → logs in</li>
+            </ol>
+          </div>
         </div>
       )}
 

@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
 export async function GET() {
@@ -12,12 +12,13 @@ export async function GET() {
       .select(
         'id, name_en, name_de, flavor_en, flavor_de, photo_url, is_mix, category, sort_order, tags, belarro_v4_product_variant(size_name, size_grams, price_eur, is_internal, deleted_at), belarro_v4_growth_procedure(stack_enabled, stack_days, blackout_enabled, blackout_days, light_enabled, light_days)'
       )
-      .eq('deleted_at', null)
+      .is('deleted_at', null)
       .eq('status', 'active');
 
     if (error) {
+      console.error('[products/public] Supabase error:', error);
       return Response.json(
-        { error: error.message },
+        { error: error.message, code: error.code },
         { status: 400 }
       );
     }

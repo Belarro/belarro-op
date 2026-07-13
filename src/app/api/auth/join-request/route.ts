@@ -30,11 +30,11 @@ export async function POST(request: NextRequest) {
 
     // Check if user already exists
     const existing = await fetchFromSupabase(
-      `/admin_users?select=id,deleted_at`
+      `/admin_users?select=id,email,deleted_at`
     );
 
     if (Array.isArray(existing) && existing.length > 0) {
-      const userExists = existing.find(u => u.email?.toLowerCase?.() === emailLower);
+      const userExists = existing.find(u => u.email && u.email.toLowerCase() === emailLower);
       if (userExists && !userExists.deleted_at) {
         return NextResponse.json(
           { success: false, error: 'User already exists. Please log in instead.' },
@@ -45,12 +45,12 @@ export async function POST(request: NextRequest) {
 
     // Check if request already exists (pending)
     const existingRequest = await fetchFromSupabase(
-      `/user_join_requests?select=id,status`
+      `/user_join_requests?select=id,email,status`
     );
 
     if (Array.isArray(existingRequest) && existingRequest.length > 0) {
       const pendingRequest = existingRequest.find(
-        r => r.email?.toLowerCase?.() === emailLower && r.status === 'pending'
+        r => r.email && r.email.toLowerCase() === emailLower && r.status === 'pending'
       );
       if (pendingRequest) {
         return NextResponse.json(
