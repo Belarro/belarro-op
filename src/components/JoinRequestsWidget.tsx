@@ -58,7 +58,8 @@ export function JoinRequestsWidget() {
       setSetPasswordLink(data.data.setPasswordLink);
       setShowCopyNotice(true);
       setTimeout(() => setShowCopyNotice(false), 3000);
-      fetchRequests();
+      // Delay refresh so user can see the link
+      setTimeout(() => fetchRequests(), 2000);
     } catch (err) {
       setError('Connection error. Please try again.');
     } finally {
