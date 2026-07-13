@@ -16,6 +16,7 @@ export function JoinRequestsWidget() {
   const [error, setError] = useState('');
   const [setPasswordLink, setSetPasswordLink] = useState('');
   const [showCopyNotice, setShowCopyNotice] = useState(false);
+  const [showLinkBox, setShowLinkBox] = useState(false);
 
   useEffect(() => {
     fetchRequests();
@@ -56,10 +57,9 @@ export function JoinRequestsWidget() {
       }
 
       setSetPasswordLink(data.data.setPasswordLink);
+      setShowLinkBox(true);
       setShowCopyNotice(true);
       setTimeout(() => setShowCopyNotice(false), 3000);
-      // Delay refresh so user can see the link
-      setTimeout(() => fetchRequests(), 2000);
     } catch (err) {
       setError('Connection error. Please try again.');
     } finally {
@@ -121,9 +121,17 @@ export function JoinRequestsWidget() {
         </div>
       )}
 
-      {setPasswordLink && (
+      {showLinkBox && setPasswordLink && (
         <div className="bg-green-50 border border-green-200 rounded-lg p-4 space-y-3">
-          <p className="text-green-800 font-semibold text-sm">✓ Approved!</p>
+          <div className="flex items-start justify-between">
+            <p className="text-green-800 font-semibold text-sm">✓ Approved!</p>
+            <button
+              onClick={() => { setShowLinkBox(false); fetchRequests(); }}
+              className="text-green-700 hover:text-green-900 font-semibold text-sm"
+            >
+              Done
+            </button>
+          </div>
           <div className="space-y-2">
             <p className="text-green-700 text-xs font-semibold">Setup link (24-hour expiry):</p>
             <div className="flex gap-2">
