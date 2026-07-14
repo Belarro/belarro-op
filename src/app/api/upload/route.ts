@@ -1,22 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-// import removed
 
 function getSupabaseConfig() {
-  const config.SUPABASE_URL = process.env.NEXT_PUBLIC_config.SUPABASE_URL;
-  const config.SUPABASE_SERVICE_ROLE_KEY = process.env.config.SUPABASE_SERVICE_ROLE_KEY;
-  if (!config.SUPABASE_URL || !config.SUPABASE_SERVICE_ROLE_KEY) {
+  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error('Missing required environment variables');
   }
-  return { config.SUPABASE_URL, config.SUPABASE_SERVICE_ROLE_KEY };
+  return { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY };
 }
 
-async function ensureBucketExists() {
-  const { config.SUPABASE_URL, config.SUPABASE_SERVICE_ROLE_KEY } = getSupabaseConfig();
+async function ensureBucketExists(config: { SUPABASE_URL: string; SUPABASE_SERVICE_ROLE_KEY: string }) {
   const url = `${config.SUPABASE_URL}/storage/v1/bucket`;
   try {
     const headers: Record<string, string> = {
-      'apikey': config.SUPABASE_SERVICE_ROLE_KEY!,
-      'Authorization': `Bearer ${config.SUPABASE_SERVICE_ROLE_KEY!}`,
+      'apikey': config.SUPABASE_SERVICE_ROLE_KEY,
+      'Authorization': `Bearer ${config.SUPABASE_SERVICE_ROLE_KEY}`,
       'Content-Type': 'application/json',
     };
     const res = await fetch(url, {
@@ -28,7 +26,7 @@ async function ensureBucketExists() {
         public: true,
       }),
     });
-    
+
     if (res.ok) {
       console.log('Successfully created crop-photos bucket');
       return true;
@@ -44,8 +42,6 @@ async function ensureBucketExists() {
 
 export async function POST(request: NextRequest) {
   try {
-    // auth handled by middleware
-    // if (!auth.ok) return auth.response;
     const config = getSupabaseConfig();
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
@@ -57,16 +53,14 @@ export async function POST(request: NextRequest) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    // Sanitize filename and make unique
     const timestamp = Date.now();
     const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
     const filename = `${timestamp}_${sanitizedName}`;
 
-    // Upload to Supabase Storage via REST API
     const uploadUrl = `${config.SUPABASE_URL}/storage/v1/object/crop-photos/${filename}`;
     const headers: Record<string, string> = {
-      'apikey': config.SUPABASE_SERVICE_ROLE_KEY!,
-      'Authorization': `Bearer ${config.SUPABASE_SERVICE_ROLE_KEY!}`,
+      'apikey': config.SUPABASE_SERVICE_ROLE_KEY,
+      'Authorization': `Bearer ${config.SUPABASE_SERVICE_ROLE_KEY}`,
       'Content-Type': file.type || 'image/jpeg',
     };
     let uploadRes = await fetch(uploadUrl, {
@@ -75,7 +69,6 @@ export async function POST(request: NextRequest) {
       body: buffer,
     });
 
-    // If upload fails, check if it's due to missing bucket and self-heal
     if (!uploadRes.ok) {
       const errText = await uploadRes.clone().text();
       let isBucketNotFound = false;
@@ -92,12 +85,11 @@ export async function POST(request: NextRequest) {
 
       if (isBucketNotFound || uploadRes.status === 404) {
         console.log('Bucket "crop-photos" not found. Attempting auto-creation...');
-        await ensureBucketExists();
+        await ensureBucketExists(config);
 
-        // Retry the upload after creating the bucket
         const retryHeaders: Record<string, string> = {
-          'apikey': config.SUPABASE_SERVICE_ROLE_KEY!,
-          'Authorization': `Bearer ${config.SUPABASE_SERVICE_ROLE_KEY!}`,
+          'apikey': config.SUPABASE_SERVICE_ROLE_KEY,
+          'Authorization': `Bearer ${config.SUPABASE_SERVICE_ROLE_KEY}`,
           'Content-Type': file.type || 'image/jpeg',
         };
         uploadRes = await fetch(uploadUrl, {
@@ -108,17 +100,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Check if the final/retry response is successful
     if (!uploadRes.ok) {
       const errText = await uploadRes.text();
       console.error('Supabase storage upload failed:', errText);
-      return NextResponse.json({ 
-        success: false, 
-        error: `Upload failed: ${uploadRes.status} - ${errText}` 
+      return NextResponse.json({
+        success: false,
+        error: `Upload failed: ${uploadRes.status} - ${errText}`
       }, { status: 500 });
     }
 
-    // Get public URL
     const publicUrl = `${config.SUPABASE_URL}/storage/v1/object/public/crop-photos/${filename}`;
 
     return NextResponse.json({
@@ -130,9 +120,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Upload error:', error);
-    return NextResponse.json({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }
 }
