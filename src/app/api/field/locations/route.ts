@@ -114,6 +114,23 @@ export async function POST(request: NextRequest) {
       if (!location_name) {
         return NextResponse.json({ success: false, error: 'location_id or location_name required' }, { status: 400 });
       }
+
+      // locations has a unique constraint on (location_name, business_address)
+      // — a plain re-insert 409s (raw Postgres error) if this exact place
+      // already exists (even archived). Treat that as "revisit an existing
+      // place" instead of crashing: look it up first and fall into the
+      // existing-location branch below.
+      if (business_address) {
+        const existing = await fetchFromSupabase(
+          `/locations?location_name=eq.${encodeURIComponent(location_name)}&business_address=eq.${encodeURIComponent(business_address)}&select=id&limit=1`
+        );
+        if (existing && existing.length > 0) {
+          locId = existing[0].id;
+        }
+      }
+    }
+
+    if (!locId) {
       const row: Record<string, unknown> = {
         location_name,
         business_address: business_address || null,
@@ -153,7 +170,9 @@ export async function POST(request: NextRequest) {
       if (!locId) return NextResponse.json({ success: false, error: 'Failed to create location' }, { status: 500 });
     } else {
       // Existing place: update the master record with the latest state.
-      const patch: Record<string, unknown> = { updated_at: new Date().toISOString(), timestamp: new Date().toISOString() };
+      // Un-archive on a fresh visit — being visited again means it's back
+      // in play, it shouldn't stay hidden from the map/list.
+      const patch: Record<string, unknown> = { updated_at: new Date().toISOString(), timestamp: new Date().toISOString(), archived: 'NO' };
       if (notes !== undefined) patch.visit_notes = notes;
       if (interest_level !== undefined) patch.interest_level = interest_level;
       if (pipeline_stage !== undefined) patch.pipeline_stage = pipeline_stage;

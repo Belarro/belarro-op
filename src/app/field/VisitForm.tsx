@@ -58,12 +58,6 @@ const OUTCOME_COLOR: Record<string, string> = {
   'Follow Up': '#f59e0b', 'Closed Deal': '#16a34a', 'Not Interested': '#dc2626',
 };
 
-const FOLLOW_UP_PRESETS = [
-  { label: '3 Days', days: 3 },
-  { label: '1 Week', days: 7 },
-  { label: '2 Weeks', days: 14 },
-];
-
 const STAGE_MAP: Record<string, { label: string; color: string }> = {
   new_visit: { label: 'New Visit', color: '#9e9e9e' },
   follow_up_1: { label: 'Follow-up 1', color: '#ffc107' },
@@ -123,7 +117,6 @@ export default function VisitForm({ loc, onClose, onSaved }: { loc: VisitFormLoc
   });
   const [phoneCode, setPhoneCode] = useState(initialPhone.code);
   const [phoneNumber, setPhoneNumber] = useState(initialPhone.number);
-  const [followUpDate, setFollowUpDate] = useState('');
   const [templates, setTemplates] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -138,14 +131,6 @@ export default function VisitForm({ loc, onClose, onSaved }: { loc: VisitFormLoc
   const [history, setHistory] = useState<VisitHistoryRow[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState<'archive' | 'delete' | null>(null);
-
-  // Default follow-up date to 1 week out when outcome implies a callback.
-  useEffect(() => {
-    if ((form.interest_level === 'Follow Up') && !followUpDate) {
-      setFollowUpDate(calculateSnappedFollowUpDate(7));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.interest_level]);
 
   // Lazy-load visit history for an existing location.
   useEffect(() => {
@@ -219,7 +204,6 @@ export default function VisitForm({ loc, onClose, onSaved }: { loc: VisitFormLoc
           notes: form.notes,
           interest_level: form.interest_level || undefined,
           pipeline_stage: pipelineStage,
-          follow_up_date: followUpDate || undefined,
           sample_given: form.sample_given === 'YES',
           uses_microgreens: form.uses_microgreens,
           language: form.language,
@@ -448,23 +432,6 @@ export default function VisitForm({ loc, onClose, onSaved }: { loc: VisitFormLoc
                   })}
                 </div>
               </div>
-
-              {form.interest_level === 'Follow Up' && (
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Follow-up Date</label>
-                  <input type="date" value={followUpDate} onChange={e => setFollowUpDate(e.target.value)}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-green-500 mb-2" />
-                  <div className="flex gap-2">
-                    {FOLLOW_UP_PRESETS.map(p => (
-                      <button key={p.label} type="button"
-                        onClick={() => setFollowUpDate(calculateSnappedFollowUpDate(p.days))}
-                        className="flex-1 text-xs font-semibold py-1.5 rounded-lg border border-gray-200 bg-white text-gray-600">
-                        {p.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Notes</label>
