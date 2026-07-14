@@ -38,6 +38,7 @@ interface VisitHistoryRow {
   sales_rep: string | null;
   notes: string | null;
   sample_given: boolean;
+  tags?: string[] | null;
 }
 
 const CONTACT_ROLES = ['Owner', 'Owner/Chef', 'Head Chef', 'Sous Chef', 'Manager', 'Buyer', 'Staff'];
@@ -57,6 +58,13 @@ const INTEREST_LEVELS = ['Follow Up', 'Closed Deal', 'Not Interested'];
 const OUTCOME_COLOR: Record<string, string> = {
   'Follow Up': '#f59e0b', 'Closed Deal': '#16a34a', 'Not Interested': '#dc2626',
 };
+
+// Quick tap-chips to capture what the chef said without typing — stored
+// permanently on the visit (belarro_op_visit.tags) alongside the notes.
+const CONVERSATION_TAGS = [
+  'wants samples', 'price concern', 'has supplier', 'call back later',
+  'interested in specific crop', 'decision maker absent', 'positive', 'negative',
+];
 
 const STAGE_MAP: Record<string, { label: string; color: string }> = {
   new_visit: { label: 'New Visit', color: '#9e9e9e' },
@@ -117,6 +125,7 @@ export default function VisitForm({ loc, onClose, onSaved, closeOnSave }: { loc:
   });
   const [phoneCode, setPhoneCode] = useState(initialPhone.code);
   const [phoneNumber, setPhoneNumber] = useState(initialPhone.number);
+  const [tags, setTags] = useState<string[]>([]);
   const [templates, setTemplates] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -172,6 +181,10 @@ export default function VisitForm({ loc, onClose, onSaved, closeOnSave }: { loc:
     return phoneCode + stripped;
   };
 
+  const toggleTag = (tag: string) => {
+    setTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
+  };
+
   const saveTemplate = async () => {
     if (!form.notes || templates.includes(form.notes)) return;
     if (!confirm('Save this as a reusable template?')) return;
@@ -202,6 +215,7 @@ export default function VisitForm({ loc, onClose, onSaved, closeOnSave }: { loc:
           business_types: form.business_types || undefined,
           business_website: form.business_website || undefined,
           notes: form.notes,
+          tags,
           interest_level: form.interest_level || undefined,
           pipeline_stage: pipelineStage,
           sample_given: form.sample_given === 'YES',
@@ -443,6 +457,21 @@ export default function VisitForm({ loc, onClose, onSaved, closeOnSave }: { loc:
               </div>
 
               <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">What did the chef say?</label>
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {CONVERSATION_TAGS.map(tag => {
+                    const active = tags.includes(tag);
+                    return (
+                      <button key={tag} type="button" onClick={() => toggleTag(tag)}
+                        className={`text-[11px] font-semibold px-2.5 py-1.5 rounded-full border ${active ? 'bg-green-600 border-green-600 text-white' : 'bg-white border-gray-200 text-gray-600'}`}>
+                        {tag}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Notes</label>
                 {templates.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mb-2">
@@ -594,6 +623,13 @@ export default function VisitForm({ loc, onClose, onSaved, closeOnSave }: { loc:
                           {v.sample_given && <span className="ml-1.5 bg-green-100 text-green-700 rounded px-1.5 py-0.5 text-[10px] font-semibold">Sample</span>}
                         </span>
                       </div>
+                      {v.tags && v.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {v.tags.map((t, ti) => (
+                            <span key={ti} className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200">{t}</span>
+                          ))}
+                        </div>
+                      )}
                       {v.notes && <div className="text-xs text-gray-600 mt-1 whitespace-pre-wrap">{v.notes}</div>}
                     </div>
                   ))}

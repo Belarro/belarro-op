@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import TimelinePanel from '@/components/TimelinePanel';
 
 interface Customer {
   id: string;
@@ -50,6 +51,7 @@ export default function CustomersPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [timelineTarget, setTimelineTarget] = useState<{ id: string; name: string } | null>(null);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -257,6 +259,14 @@ export default function CustomersPage() {
 
       {toast && <div className="fixed top-6 right-6 z-50 bg-gray-900 text-white text-sm px-4 py-2.5 rounded-lg shadow-lg">{toast}</div>}
 
+      {timelineTarget && (
+        <TimelinePanel
+          locationId={timelineTarget.id}
+          locationName={timelineTarget.name}
+          onClose={() => setTimelineTarget(null)}
+        />
+      )}
+
       {/* Tabs */}
       <div className="flex border-b border-gray-200">
         {(['active', 'prospect', 'paused', 'inactive'] as const).map(tab => (
@@ -351,7 +361,17 @@ export default function CustomersPage() {
             <div key={c.id} className={`bg-white border rounded-xl p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between ${c._source === 'saletracker' ? 'border-blue-100' : 'border-gray-200'}`}>
               <div>
                 <div className="flex items-start justify-between gap-2">
-                  <h3 className="text-lg font-bold text-gray-900">{c.name}</h3>
+                  {c._source === 'saletracker' ? (
+                    <button
+                      type="button"
+                      onClick={() => setTimelineTarget({ id: c.id, name: c.name })}
+                      className="text-lg font-bold text-gray-900 hover:text-green-700 hover:underline text-left"
+                    >
+                      {c.name}
+                    </button>
+                  ) : (
+                    <h3 className="text-lg font-bold text-gray-900">{c.name}</h3>
+                  )}
                   {c._source === 'saletracker' && (
                     <span className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100">Visited</span>
                   )}

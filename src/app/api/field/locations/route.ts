@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
       location_id, location_name, business_address,
       contact_person, contact_title, direct_phone, direct_email,
       business_types, business_website, business_phone, business_email,
-      notes, interest_level, pipeline_stage, follow_up_date, sample_given, uses_microgreens, language,
+      notes, tags, interest_level, pipeline_stage, follow_up_date, sample_given, uses_microgreens, language,
       lat, lng, direct_link, place_id,
     } = body;
 
@@ -191,19 +191,26 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const visit = await fetchFromSupabase('/belarro_op_visit', {
-      method: 'POST',
-      body: JSON.stringify({
-        location_id: locId,
-        visit_date: new Date().toISOString(),
-        sales_rep: email,
-        contact_person: contact_person || null,
-        interest_level: interest_level || null,
-        pipeline_stage: pipeline_stage || null,
-        notes: notes || null,
-        sample_given: !!sample_given,
-      }),
-    });
+    const visitRow: Record<string, unknown> = {
+      location_id: locId,
+      visit_date: new Date().toISOString(),
+      sales_rep: email,
+      contact_person: contact_person || null,
+      interest_level: interest_level || null,
+      pipeline_stage: pipeline_stage || null,
+      notes: notes || null,
+      sample_given: !!sample_given,
+    };
+    if (Array.isArray(tags) && tags.length > 0) visitRow.tags = tags;
+
+    let visit;
+    try {
+      visit = await fetchFromSupabase('/belarro_op_visit', { method: 'POST', body: JSON.stringify(visitRow) });
+    } catch {
+      // tags column not migrated yet — retry without it.
+      delete visitRow.tags;
+      visit = await fetchFromSupabase('/belarro_op_visit', { method: 'POST', body: JSON.stringify(visitRow) });
+    }
 
     return NextResponse.json({ success: true, data: { location_id: locId, visit: visit?.[0] || null } }, { status: 201 });
   } catch (error) {

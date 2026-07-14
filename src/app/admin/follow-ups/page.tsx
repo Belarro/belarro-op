@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
+import TimelinePanel from '@/components/TimelinePanel';
 
 interface FollowUp {
   id: string;
@@ -124,6 +125,7 @@ export default function FollowUpsPage() {
   const [emailError, setEmailError] = useState<{ id: string; msg: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<FollowUp | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [timelineTarget, setTimelineTarget] = useState<{ id: string; name: string } | null>(null);
 
   const fetchFollowups = async () => {
     try {
@@ -416,7 +418,13 @@ export default function FollowUpsPage() {
         {/* Header */}
         <div className="flex justify-between items-start gap-2">
           <div>
-            <div className="font-bold text-gray-900 text-base">{restaurantName}</div>
+            <button
+              type="button"
+              onClick={() => setTimelineTarget({ id: f.location.id, name: restaurantName })}
+              className="font-bold text-gray-900 text-base hover:text-green-700 hover:underline text-left"
+            >
+              {restaurantName}
+            </button>
             {contactName && contactName !== restaurantName && (
               <div className="text-xs text-gray-500 mt-0.5">{contactName}</div>
             )}
@@ -998,6 +1006,15 @@ export default function FollowUpsPage() {
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm font-semibold px-5 py-3 rounded-xl shadow-xl z-50">
           Snoozed — will reappear on {new Date(snoozeSuccess).toLocaleDateString('en-DE', { day: 'numeric', month: 'long', year: 'numeric' })}
         </div>
+      )}
+
+      {/* Full conversation history — every visit + every message sent */}
+      {timelineTarget && (
+        <TimelinePanel
+          locationId={timelineTarget.id}
+          locationName={timelineTarget.name}
+          onClose={() => setTimelineTarget(null)}
+        />
       )}
 
       {/* Delete confirmation */}
