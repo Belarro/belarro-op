@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { verifySession } from '@/lib/session';
 
-const PUBLIC_ROUTES = ['/login', '/', '/order'];
+const PUBLIC_ROUTES = ['/login', '/', '/for-chefs', '/for-chefs.html'];
 // These API routes are public at the middleware level; each does its own
 // auth inside the route where noted (shared secret and/or session).
 // NOTE: this is ONE app now (admin + field) — the field pages are

@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bestellen — Belarro</title>
+  <meta name="robots" content="noindex, nofollow">
+
+  <!-- Favicon -->
+  <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Shared Styles -->
+  <link rel="stylesheet" href="css/styles.css">
+
+  <style>
+    body { padding-bottom: 90px; }
+
+    /* ── Minimal header override ── */
+    .chef-header {
+      position: fixed;
+      top: 0; left: 0; width: 100%;
+      padding: 20px 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 1000;
+      background: rgba(5, 5, 5, 0.95);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .chef-header__logo {
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: #fff;
+    }
+    .chef-header__back {
+      font-size: 0.7rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--fg-muted);
+      transition: color 0.2s ease;
+    }
+    .chef-header__back:hover { color: #fff; }
+
+    /* ── Welcome strip ── */
+    .welcome-strip {
+      margin-top: 61px;
+      padding: 12px 24px;
+      background: #111;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      text-align: center;
+    }
+    .welcome-strip__line {
+      font-size: 0.72rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #F4F4F5;
+    }
+    .welcome-strip__sub {
+      font-size: 0.6rem;
+      font-weight: 400;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--fg-muted);
+      margin-top: 8px;
+    }
+
+
+    /* ── Chef product grid ── */
+    .chef-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 24px;
+      padding: 0 48px 80px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    /* ── Chef card — horizontal layout ── */
+    .chef-card {
+      display: grid;
+      grid-template-columns: 140px 1fr;
+      background: #0c0c0c;
+      border: 1px solid rgba(255,255,255,0.06);
+      overflow: hidden;
+      transition: border-color 0.25s ease, transform 0.25s ease;
+    }
+    .chef-card:hover {
+      border-color: rgba(255,255,255,0.15);
+    }
+
+    .chef-card__image-wrap {
+      aspect-ratio: auto;
+      background: #F8F7F4;
+      position: relative;
+      overflow: hidden;
+      align-self: stretch;
+    }
+    .chef-card__image-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .chef-card__body {
+      padding: 18px 18px 14px;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .chef-card__name {
+      font-family: var(--font-display, 'Inter'), serif;
+      font-size: 1rem;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      text-transform: none;
+      color: #fff;
+      margin-bottom: 3px;
+      line-height: 1.2;
+    }
+    .chef-card__flavor {
+      font-size: 0.8rem;
+      font-weight: 300;
+      font-style: italic;
+      color: #c8c8c8;
+      text-transform: none;
+      margin-bottom: 14px;
+      line-height: 1.4;
+    }
+    .chef-card__grow-days {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      color: #7fae94;
+      background: rgba(127,174,148,0.12);
+      border-radius: 20px;
+      padding: 3px 10px;
+      margin-bottom: 14px;
+      width: fit-content;
+    }
+
+    /* ── Size chips ── */
+    .chef-card__sizes {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: auto;
+    }
+    .chef-card__size-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 2px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      user-select: none;
+    }
+    .chef-card__size-row:hover {
+      background: rgba(255,255,255,0.06);
+      border-color: rgba(255,255,255,0.12);
+    }
+    .chef-card__size-row.is-selected {
+      background: rgba(255,255,255,0.08);
+      border-color: rgba(255,255,255,0.25);
+    }
+    .chef-card__size-left {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      min-width: 0;
+    }
+    .chef-card__size-label {
+      font-size: 0.72rem;
+      font-weight: 500;
+      color: #fff;
+      letter-spacing: 0.02em;
+    }
+    .chef-card__size-price {
+      font-size: 0.68rem;
+      font-weight: 400;
+      color: #8a8a8a;
+      letter-spacing: 0.02em;
+    }
+    .chef-card__size-action {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .chef-card__qty-badge {
+      display: none;
+      align-items: center;
+      gap: 6px;
+    }
+    .chef-card__size-row.is-selected .chef-card__qty-badge { display: flex; }
+    .chef-card__size-row.is-selected .chef-card__add-icon { display: none; }
+    .chef-card__qty-minus, .chef-card__qty-plus {
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255,255,255,0.12);
+      border-radius: 3px;
+      font-size: 1.1rem;
+      color: #fff;
+      transition: background 0.15s;
+    }
+    .chef-card__qty-minus:hover, .chef-card__qty-plus:hover {
+      background: rgba(255,255,255,0.22);
+    }
+    .chef-card__qty-num {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #fff;
+      min-width: 20px;
+      text-align: center;
+    }
+    .chef-card__add-icon {
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 3px;
+      font-size: 1.2rem;
+      color: #e0e0e0;
+      font-weight: 300;
+      line-height: 1;
+    }
+    .chef-card__size-row:hover .chef-card__add-icon {
+      color: #fff;
+      border-color: rgba(255,255,255,0.5);
+      background: rgba(255,255,255,0.05);
+    }
+
+    /* ── Order bar (sticky bottom) ── */
+    .order-bar {
+      position: fixed;
+      bottom: 0; left: 0; width: 100%;
+      background: var(--bg-elevated);
+      border-top: 1px solid var(--border);
+      padding: 16px 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 998;
+      transition: transform 0.3s var(--ease-out);
+    }
+    .order-bar.is-empty {
+      transform: translateY(0);
+    }
+    .order-bar__info {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--fg-muted);
+    }
+    .order-bar__info span {
+      color: var(--fg);
+    }
+    .order-bar__btn {
+      padding: 12px 32px;
+      border: 1px solid rgba(255,255,255,0.3);
+      background: transparent;
+      color: var(--fg);
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    .order-bar__btn.has-items {
+      background: #25D366;
+      border-color: #25D366;
+      color: #fff;
+    }
+    .order-bar__btn.has-items:hover {
+      background: #1ebe5d;
+      border-color: #1ebe5d;
+    }
+    .order-bar__btn:hover {
+      background: var(--fg);
+      color: var(--bg);
+      border-color: var(--fg);
+    }
+    .order-bar__btn:disabled {
+      opacity: 0.3;
+      cursor: default;
+    }
+    .order-bar__btn:disabled:hover {
+      background: transparent;
+      color: var(--fg);
+      border-color: rgba(255,255,255,0.3);
+    }
+
+    /* ── Splash overlay ── */
+    .splash-overlay {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(5,5,5,0.92);
+      z-index: 2000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 1;
+      transition: opacity 0.4s ease;
+    }
+    .splash-overlay.is-hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .splash-card {
+      text-align: center;
+      max-width: 420px;
+      padding: 60px 48px;
+      border: 1px solid var(--border);
+      background: var(--bg-elevated);
+    }
+    .splash-card__title {
+      font-size: 1.6rem;
+      font-weight: 300;
+      letter-spacing: 0.02em;
+      margin-bottom: 16px;
+    }
+    .splash-card__text {
+      font-size: 0.78rem;
+      font-weight: 300;
+      color: var(--fg-muted);
+      line-height: 1.7;
+      margin-bottom: 32px;
+    }
+    .splash-card__btn {
+      display: inline-block;
+      padding: 14px 40px;
+      border: 1px solid rgba(255,255,255,0.3);
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--fg);
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    .splash-card__btn:hover {
+      background: var(--fg);
+      color: var(--bg);
+      border-color: var(--fg);
+    }
+
+    /* ── Restaurant name modal ── */
+    .chef-modal {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(5,5,5,0.88);
+      z-index: 2000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    .chef-modal.is-visible {
+      display: flex;
+    }
+    .chef-modal__card {
+      max-width: 400px;
+      width: 90%;
+      padding: 48px 40px;
+      border: 1px solid var(--border);
+      background: var(--bg-elevated);
+      text-align: center;
+    }
+    .chef-modal__title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 20px;
+    }
+    .chef-modal__label {
+      display: block;
+      font-size: 0.6rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--fg-muted);
+      margin-bottom: 6px;
+      text-align: left;
+    }
+    .chef-modal__input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      background: var(--bg-surface);
+      color: var(--fg);
+      font-size: 0.85rem;
+      font-weight: 400;
+      text-align: left;
+      margin-bottom: 16px;
+      transition: border-color 0.2s ease;
+    }
+    .chef-modal__input::placeholder {
+      color: var(--fg-dim);
+    }
+    .chef-modal__input:focus {
+      border-color: var(--fg-muted);
+    }
+    .chef-modal__actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+    }
+    .chef-modal__send {
+      padding: 12px 32px;
+      border: 1px solid rgba(255,255,255,0.3);
+      background: transparent;
+      color: var(--fg);
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    .chef-modal__send:hover {
+      background: var(--fg);
+      color: var(--bg);
+      border-color: var(--fg);
+    }
+    .chef-modal__cancel {
+      padding: 12px 24px;
+      font-size: 0.65rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--fg-dim);
+      cursor: pointer;
+      transition: color 0.2s ease;
+    }
+    .chef-modal__cancel:hover { color: var(--fg-muted); }
+
+    /* ── Loading state ── */
+    .chef-loading {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 80px 40px;
+      font-size: 0.78rem;
+      font-weight: 400;
+      color: var(--fg-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    /* ── chef-header lang links ── */
+    .chef-header__lang { font-size: 0.65rem; color: var(--fg-muted); letter-spacing: 0.05em; }
+    .chef-header__lang a { color: var(--fg-muted); transition: color 0.2s; }
+    .chef-header__lang a:hover, .header__lang-active { color: #fff !important; }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      body { padding-bottom: 100px; }
+      .chef-header { padding: 14px 20px; }
+      .welcome-strip { padding: 10px 16px; margin-top: 52px; }
+      .welcome-strip__line { font-size: 0.62rem; line-height: 1.6; }
+      .welcome-strip__sub { font-size: 0.54rem; }
+      .chef-grid { padding: 0 16px 80px; gap: 14px; grid-template-columns: 1fr; }
+      .order-bar { padding: 12px 16px; flex-wrap: wrap; gap: 8px; }
+      .order-bar__btn { width: 100%; text-align: center; }
+      .splash-card { padding: 40px 24px; margin: 0 20px; }
+      .chef-modal__card { padding: 36px 24px; }
+
+      .chef-card { grid-template-columns: 110px 1fr; }
+      .chef-card__body { padding: 14px 14px 12px; }
+      .chef-card__name { font-size: 0.95rem; }
+      .chef-card__flavor { font-size: 0.78rem; margin-bottom: 10px; }
+      .chef-card__size-row { padding: 9px 10px; }
+      .chef-card__size-label { font-size: 0.7rem; }
+      .chef-card__size-price { font-size: 0.66rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER — minimal ordering interface, no nav distraction -->
+  <header class="chef-header" id="site-header">
+    <a href="./" class="chef-header__logo">BELARRO</a>
+    <span class="chef-header__lang"><a href="#" id="lang-en">EN</a> · <a href="#" id="lang-de">DE</a></span>
+  </header>
+
+  <!-- WELCOME STRIP -->
+  <div class="welcome-strip">
+    <p class="welcome-strip__line" id="strip-line" data-i18n="strip_main">Tuesdays · Free Delivery · No Minimum Order · 10-Day Shelf Life</p>
+    <p class="welcome-strip__sub" data-i18n="strip_sub">All prices excl. VAT · Same-morning harvest · Soil-grown</p>
+  </div>
+
+  <!-- FILTER BAR -->
+  <div class="filter-bar" id="filter-bar">
+    <div class="filter-bar__triggers">
+      <button class="filter-trigger" data-panel="flavor" data-i18n="filter_flavor">Flavor <span class="filter-trigger__count"></span></button>
+      <button class="filter-trigger" data-panel="pairs" data-i18n="filter_pairs">Pairs with <span class="filter-trigger__count"></span></button>
+      <button class="filter-trigger" data-panel="color" data-i18n="filter_color">Color <span class="filter-trigger__count"></span></button>
+      <button class="filter-trigger filter-chip" data-group="type" data-value="mix" data-i18n="tab_mixes">Mixes</button>
+      <button class="filter-clear" id="filter-clear" data-i18n="filter_clear">Clear</button>
+    </div>
+    <div class="filter-panel" id="panel-flavor" data-group="flavor">
+      <button class="filter-chip" data-group="flavor" data-value="Peppery">Peppery</button>
+      <button class="filter-chip" data-group="flavor" data-value="Sweet">Sweet</button>
+      <button class="filter-chip" data-group="flavor" data-value="Earthy">Earthy</button>
+      <button class="filter-chip" data-group="flavor" data-value="Herbal">Herbal</button>
+      <button class="filter-chip" data-group="flavor" data-value="Anise">Anise</button>
+      <button class="filter-chip" data-group="flavor" data-value="Nutty">Nutty</button>
+      <button class="filter-chip" data-group="flavor" data-value="Garlic">Garlic</button>
+    </div>
+    <div class="filter-panel" id="panel-pairs" data-group="pairs">
+      <button class="filter-chip" data-group="pairs" data-value="Seafood">Seafood</button>
+      <button class="filter-chip" data-group="pairs" data-value="Meat">Meat</button>
+      <button class="filter-chip" data-group="pairs" data-value="Asian">Asian</button>
+      <button class="filter-chip" data-group="pairs" data-value="Italian">Italian</button>
+      <button class="filter-chip" data-group="pairs" data-value="Salad">Salad</button>
+      <button class="filter-chip" data-group="pairs" data-value="Dessert">Dessert</button>
+    </div>
+    <div class="filter-panel" id="panel-color" data-group="color">
+      <button class="filter-chip" data-group="color" data-value="green">Green</button>
+      <button class="filter-chip" data-group="color" data-value="red">Red / Purple</button>
+      <button class="filter-chip" data-group="color" data-value="yellow">Yellow / Gold</button>
+      <button class="filter-chip" data-group="color" data-value="mixed">Mixed</button>
+    </div>
+    <span class="filter-status" id="filter-status"></span>
+  </div>
+
+  <!-- PRODUCT GRID -->
+  <div class="chef-grid" id="chef-grid">
+    <p class="chef-loading" data-i18n="loading">Loading products…</p>
+  </div>
+
+  <!-- ORDER BAR -->
+  <div class="order-bar" id="order-bar">
+    <span class="order-bar__info" id="order-info" data-i18n="order_empty">No products selected</span>
+    <button class="order-bar__btn" id="order-btn" disabled data-i18n="order_send">Send Order</button>
+  </div>
+
+  <!-- SPLASH OVERLAY -->
+  <div class="splash-overlay" id="splash-overlay">
+    <div class="splash-card">
+      <h2 class="splash-card__title" data-i18n="splash_title">Welcome, Chef.</h2>
+      <p class="splash-card__text" data-i18n="splash_text">No minimum order. No delivery fees.<br>Just fresh products.</p>
+      <button class="splash-card__btn" id="splash-dismiss" data-i18n="splash_btn">Let's go</button>
+    </div>
+  </div>
+
+  <!-- RESTAURANT / CONTACT MODAL -->
+  <div class="chef-modal" id="chef-modal">
+    <div class="chef-modal__card">
+      <h3 class="chef-modal__title" data-i18n="modal_title">Confirm Your Details</h3>
+      <label class="chef-modal__label" data-i18n="modal_lbl_restaurant">Restaurant</label>
+      <input type="text" class="chef-modal__input" id="restaurant-input" placeholder="e.g. Nobelhart &amp; Schmutzig" autocomplete="organization" data-i18n-placeholder="modal_placeholder">
+      <label class="chef-modal__label" data-i18n="modal_lbl_person">Your name</label>
+      <input type="text" class="chef-modal__input" id="person-input" placeholder="e.g. Billy Wagner" autocomplete="name" data-i18n-placeholder="modal_person_placeholder">
+      <label class="chef-modal__label" data-i18n="modal_lbl_position">Position</label>
+      <input type="text" class="chef-modal__input" id="position-input" placeholder="e.g. Head Chef" autocomplete="organization-title" data-i18n-placeholder="modal_position_placeholder">
+      <div class="chef-modal__actions">
+        <button class="chef-modal__send" id="modal-send" data-i18n="modal_send">Send via WhatsApp</button>
+        <button class="chef-modal__cancel" id="modal-cancel" data-i18n="modal_cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="footer" style="padding-bottom: 100px;">
+    <span>&copy; 2026 Belarro</span>
+    <span class="footer__sep">&middot;</span>
+    <span>Berlin</span>
+    <span class="footer__sep">&middot;</span>
+    <a href="mailto:hello@belarro.com">hello@belarro.com</a>
+    <span class="footer__sep">&middot;</span>
+    <a href="./impressum.html">Impressum</a>
+    <span class="footer__sep">&middot;</span>
+    <a href="./privacy.html">Datenschutz</a>
+  </footer>
+
+  <!-- PAGE SCRIPT -->
+  <script>
+  (function() {
+    'use strict';
+
+    /* ── Config — belarro-v4 admin Supabase, single source of truth ── */
+    var SUPABASE_URL = 'https://wbqzlxdyjdmbzifhsyil.supabase.co';
+    var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndicXpseGR5amRtYnppZmhzeWlsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3NzkyODQsImV4cCI6MjA5NzM1NTI4NH0.8CsCaUq59d74lvHEDJdhwVVuXJ0056fdGeOp9TlF4Ps';
+    var WHATSAPP_NUMBER = '4915906442264';
+
+    /* ══════════════════════════════════════════════
+       i18n — All translatable strings
+       ══════════════════════════════════════════════ */
+    var STRINGS = {
+      en: {
+        nav_lab: 'The Lab', nav_collection: 'The Collection', nav_portal: 'Chef Portal', nav_cta: 'Request Samples',
+        strip_main: 'Tuesdays · Free Delivery · No Minimum Order · 10-Day Shelf Life',
+        strip_sub: 'All prices excl. VAT · Same-morning harvest · Soil-grown',
+        tab_all: 'All', tab_mixes: 'Mixes',
+        filter_flavor: 'Flavor', filter_pairs: 'Pairs with', filter_color: 'Color', filter_clear: 'Clear',
+        loading: 'Loading products…', load_error: 'Could not load products. Please refresh.',
+        no_products: 'No products available.',
+        order_empty: 'No products selected', order_send: 'Send Order',
+        product_singular: 'product', product_plural: 'products',
+        splash_title: 'Welcome, Chef.', splash_text: 'Browse our full range with prices.<br>Pick what you need. Order in seconds.<br><br>No minimum. Free delivery. Every Tuesday.', splash_btn: "Show me everything",
+        modal_title: 'Confirm Your Details',
+        modal_lbl_restaurant: 'Restaurant', modal_lbl_person: 'Your name', modal_lbl_position: 'Position',
+        modal_placeholder: 'e.g. Nobelhart & Schmutzig', modal_person_placeholder: 'e.g. Billy Wagner', modal_position_placeholder: 'e.g. Head Chef',
+        modal_send: 'Send via WhatsApp', modal_cancel: 'Cancel',
+        wa_header: 'New order from', wa_contact: 'Contact', wa_position: 'Position',
+        wa_total: 'Total', wa_vat: '(excl. VAT)', wa_unknown: 'Unknown',
+        tray_label: 'Container', grow_days: 'days to grow'
+      },
+      de: {
+        nav_lab: 'Das Labor', nav_collection: 'Die Kollektion', nav_portal: 'Chef Portal', nav_cta: 'Proben anfordern',
+        strip_main: 'Dienstags · Kostenlose Lieferung · Keine Mindestbestellung · 10 Tage Haltbarkeit',
+        strip_sub: 'Alle Preise zzgl. MwSt. · Ernte am selben Morgen · Bodengewachsen',
+        tab_all: 'Alle', tab_mixes: 'Mischungen',
+        filter_flavor: 'Geschmack', filter_pairs: 'Passt zu', filter_color: 'Farbe', filter_clear: 'Zurücksetzen',
+        loading: 'Produkte laden…', load_error: 'Produkte konnten nicht geladen werden. Bitte Seite neu laden.',
+        no_products: 'Keine Produkte verfügbar.',
+        order_empty: 'Noch keine Produkte ausgewählt', order_send: 'Bestellung senden',
+        product_singular: 'Produkt', product_plural: 'Produkte',
+        splash_title: 'Willkommen, Chef.', splash_text: 'Alle Sorten mit Preisen auf einen Blick.<br>Auswählen, bestellen, fertig.<br><br>Keine Mindestbestellung. Kostenlose Lieferung. Jeden Dienstag.', splash_btn: "Zeig mir alles",
+        modal_title: 'Bitte Daten bestätigen',
+        modal_lbl_restaurant: 'Restaurant', modal_lbl_person: 'Ihr Name', modal_lbl_position: 'Position',
+        modal_placeholder: 'z.B. Nobelhart & Schmutzig', modal_person_placeholder: 'z.B. Billy Wagner', modal_position_placeholder: 'z.B. Chefkoch',
+        modal_send: 'Senden via WhatsApp', modal_cancel: 'Abbrechen',
+        wa_header: 'Neue Bestellung von', wa_contact: 'Kontakt', wa_position: 'Position',
+        wa_total: 'Gesamt', wa_vat: '(zzgl. MwSt.)', wa_unknown: 'Unbekannt',
+        tray_label: 'Container', grow_days: 'Tage bis zur Ernte'
+      }
+    };
+
+    /* Detect language: saved preference > browser > default DE */
+    var savedLang = localStorage.getItem('belarro-chef-lang');
+    var browserLang = (navigator.language || '').slice(0, 2).toLowerCase();
+    var lang = savedLang || (browserLang === 'de' ? 'de' : 'en');
+
+    function t(key) { return (STRINGS[lang] || STRINGS.en)[key] || key; }
+
+    function applyLang() {
+      document.documentElement.lang = lang;
+      document.title = lang === 'de' ? 'Bestellen — Belarro' : 'Order — Belarro';
+
+      /* Update all data-i18n elements */
+      document.querySelectorAll('[data-i18n]').forEach(function(el) {
+        var key = el.getAttribute('data-i18n');
+        var val = t(key);
+        if (val) el.innerHTML = val;
+      });
+
+      /* Update placeholders */
+      document.querySelectorAll('[data-i18n-placeholder]').forEach(function(el) {
+        var key = el.getAttribute('data-i18n-placeholder');
+        el.placeholder = t(key);
+      });
+
+      /* Highlight active lang toggle */
+      var enLink = document.getElementById('lang-en');
+      var deLink = document.getElementById('lang-de');
+      if (enLink) enLink.className = lang === 'en' ? 'header__lang-active' : '';
+      if (deLink) deLink.className = lang === 'de' ? 'header__lang-active' : '';
+
+      /* Update order bar text */
+      updateOrderBar();
+    }
+
+    /* Language switcher clicks */
+    document.getElementById('lang-en').addEventListener('click', function(e) {
+      e.preventDefault(); lang = 'en'; localStorage.setItem('belarro-chef-lang', 'en'); applyLang();
+      if (allProducts.length) renderGrid(allProducts);
+    });
+    document.getElementById('lang-de').addEventListener('click', function(e) {
+      e.preventDefault(); lang = 'de'; localStorage.setItem('belarro-chef-lang', 'de'); applyLang();
+      if (allProducts.length) renderGrid(allProducts);
+    });
+
+    /* ── Fallback prices by category (used only if product has no prices/sizes) ── */
+    var PRICE_FALLBACK = {
+      shoot:       [{ label: '225g', price: 24 }, { label: '450g', price: 38 }],
+      mix:         [{ label: '225g', price: 24 }, { label: '450g', price: 38 }],
+      microgreen:  [{ label: '100g', price: 14 }, { label: '225g', price: 24 }],
+      petite_herb: [{ labelKey: 'tray_label', price: 10 }]
+    };
+
+    /* ── State ── */
+    var cart = new Map();
+    var allProducts = [];
+
+    /* ── DOM refs ── */
+    var grid = document.getElementById('chef-grid');
+    var orderInfo = document.getElementById('order-info');
+    var orderBtn = document.getElementById('order-btn');
+    var filterBar = document.getElementById('filter-bar');
+    var splash = document.getElementById('splash-overlay');
+    var splashDismiss = document.getElementById('splash-dismiss');
+    var modal = document.getElementById('chef-modal');
+    var restaurantInput = document.getElementById('restaurant-input');
+    var personInput = document.getElementById('person-input');
+    var positionInput = document.getElementById('position-input');
+    var modalSend = document.getElementById('modal-send');
+    var modalCancel = document.getElementById('modal-cancel');
+
+    /* ── URL pre-fill: ?r=restaurant&p=person&t=title (fallback to legacy c=/n=) ── */
+    var urlParams = new URLSearchParams(window.location.search);
+    var prefillR = urlParams.get('r') || urlParams.get('c');
+    var prefillP = urlParams.get('p') || urlParams.get('n');
+    var prefillT = urlParams.get('t');
+    if (prefillR) restaurantInput.value = prefillR;
+    if (prefillP) personInput.value = prefillP;
+    if (prefillT) positionInput.value = prefillT;
+
+    /* ── Splash logic — always show when arriving from a tracked link (c= or n= or r= params) ── */
+    var fromLink = urlParams.has('c') || urlParams.has('n') || urlParams.has('r');
+    if (!fromLink && localStorage.getItem('belarro-chef-splash') === 'dismissed') {
+      splash.classList.add('is-hidden');
+    }
+    splashDismiss.addEventListener('click', function() {
+      splash.classList.add('is-hidden');
+      localStorage.setItem('belarro-chef-splash', 'dismissed');
+    });
+
+    /* ── Load products from the belarro-v4 admin DB ──
+       Crops + priced variants come from the same tables the admin edits
+       (Crops → Sizes & Prices / Crop Summary). Only active crops with at
+       least one public priced size are shown. */
+    /* Total grow days = stack + blackout + light, straight from the fields
+       shown in admin's Grow Procedure tab. Do NOT use the DB's
+       total_growth_days column — it silently drops blackout_days. */
+    function growDaysFromProcedure(procedure) {
+      if (!procedure) return null;
+      var days = 0;
+      if (procedure.stack_enabled && procedure.stack_days) days += procedure.stack_days;
+      if (procedure.blackout_enabled && procedure.blackout_days) days += procedure.blackout_days;
+      if (procedure.light_enabled && procedure.light_days) days += procedure.light_days;
+      return days || null;
+    }
+
+    /* Color map — product name → color group, same mapping as the Collection page */
+    var COLOR_MAP = {
+      'Pea Shoots': 'green', 'Sunflower': 'green', 'Broccoli': 'green', 'Pak Choi': 'green',
+      'Parsley': 'green', 'Coriander': 'green', 'Dill': 'green', 'Fennel': 'green', 'Leek': 'green',
+      'Radish Daikon': 'green', 'Nasturtium Alaska': 'green', 'Mustard White': 'green',
+      'Kale': 'green', 'Rocket / Rucola': 'green', 'Garlic': 'green',
+      'Radish Red Rambo': 'red', 'Red Beet Bull': 'red', 'Red Cabbage': 'red',
+      'Red Kohlrabi': 'red', 'Amaranth': 'red',
+      'Popcorn / Corn Shoots': 'yellow', 'Yellow Beet': 'yellow',
+      'Radish Mix': 'mixed', 'Garden Mix': 'mixed'
+    };
+    function getProductColor(name) { return COLOR_MAP[name] || 'green'; }
+
+    async function loadProducts() {
+      var baseCols = 'id,name_en,name_de,flavor_en,flavor_de,photo_url,is_mix';
+      var extCols = baseCols + ',category,sort_order,tags';
+      var variantSel = ',belarro_v4_product_variant(size_name,size_grams,price_eur,is_internal,deleted_at)';
+      var procedureSel = ',belarro_v4_growth_procedure(stack_enabled,stack_days,blackout_enabled,blackout_days,light_enabled,light_days)';
+      var mkUrl = function (cols) {
+        return SUPABASE_URL + '/rest/v1/belarro_v4_crop?deleted_at=is.null&status=eq.active&select=' + cols + variantSel + procedureSel;
+      };
+      var headers = { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY };
+      try {
+        var res = await fetch(mkUrl(extCols), { headers: headers });
+        if (!res.ok) res = await fetch(mkUrl(baseCols), { headers: headers });
+        if (!res.ok) throw new Error('Failed');
+        var crops = await res.json();
+
+        allProducts = crops
+          .map(function (c) {
+            var sizes = (c.belarro_v4_product_variant || [])
+              .filter(function (v) { return !v.is_internal && v.price_eur != null && !v.deleted_at; })
+              .sort(function (a, b) { return (a.size_grams || 0) - (b.size_grams || 0); })
+              .map(function (v) { return { label: v.size_name, price: v.price_eur, grams: v.size_grams }; });
+            var procedure = Array.isArray(c.belarro_v4_growth_procedure) ? c.belarro_v4_growth_procedure[0] : c.belarro_v4_growth_procedure;
+            return {
+              id: c.id,
+              name: c.name_en,
+              name_de: c.name_de,
+              flavor_en: c.flavor_en || '',
+              flavor_de: c.flavor_de || '',
+              photo: c.photo_url || '',
+              category: c.category || (c.is_mix ? 'mix' : 'microgreen'),
+              sort_order: c.sort_order != null ? c.sort_order : 999,
+              sizes: sizes,
+              growDays: growDaysFromProcedure(procedure),
+              tags: c.tags || [],
+              color: getProductColor(c.name_en)
+            };
+          })
+          .filter(function (p) { return p.sizes.length > 0; })
+          .sort(function (a, b) { return a.sort_order - b.sort_order || a.name.localeCompare(b.name); });
+
+        renderGrid(allProducts);
+        initFilters();
+      } catch (err) {
+        grid.innerHTML = '<p class="chef-loading">' + t('load_error') + '</p>';
+      }
+    }
+
+    /* ── Render ── */
+    function renderGrid(products) {
+      if (!products.length) { grid.innerHTML = '<p class="chef-loading">' + t('no_products') + '</p>'; return; }
+      grid.innerHTML = products.map(renderCard).join('');
+    }
+
+    function esc(str) { return str ? str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : ''; }
+    function escA(str) { return str ? str.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : ''; }
+
+    function sizeToGrams(label) {
+      var m = label.match(/(\d+)\s*g/i);
+      return m ? parseInt(m[1]) : (label === 'container' ? 9999 : 0);
+    }
+
+    function getSizes(product) {
+      /* Sizes come pre-mapped from the admin DB (belarro_v4_product_variant).
+         Size labels can be overridden per crop: e.g., Leek "container" → "box" */
+      var sizeLabels = {
+        'Leek': { 'container': 'box' },
+        'Garlic': { 'container': 'box' },
+      };
+      var overrides = sizeLabels[product.name] || {};
+      return (product.sizes || []).map(function(s) {
+        var label = overrides[s.label] || s.label;
+        label = /^(container|tray)$/i.test(label) ? t('tray_label') : label;
+        return { label: label, price: s.price };
+      });
+    }
+
+    function renderCard(product) {
+      var cat = product.category || 'microgreen';
+      var sizes = getSizes(product);
+      var displayName = (lang === 'de' && product.name_de) ? product.name_de : product.name;
+      var flavor = (lang === 'de' ? product.flavor_de : product.flavor_en) || '';
+
+      var sizesHTML = sizes.map(function(s, i) {
+        var sizeLabel = s.label;
+        var key = product.id + '-' + i;
+        var existing = cart.get(key);
+        var qty = existing ? existing.qty : 0;
+        var selectedCls = qty > 0 ? ' is-selected' : '';
+        return '<div class="chef-card__size-row' + selectedCls + '" data-action="add" data-key="' + escA(key) + '" data-name="' + escA(displayName) + '" data-label="' + escA(sizeLabel) + '" data-price="' + s.price + '" id="row-' + escA(key) + '">' +
+          '<div class="chef-card__size-left">' +
+            '<span class="chef-card__size-label">' + esc(sizeLabel) + '</span>' +
+            '<span class="chef-card__size-price">&euro;' + s.price + '</span>' +
+          '</div>' +
+          '<div class="chef-card__size-action">' +
+            '<span class="chef-card__add-icon">+</span>' +
+            '<div class="chef-card__qty-badge">' +
+              '<button class="chef-card__qty-minus" data-action="dec" data-key="' + escA(key) + '">&minus;</button>' +
+              '<span class="chef-card__qty-num" id="qty-' + escA(key) + '">' + qty + '</span>' +
+              '<button class="chef-card__qty-plus" data-action="inc" data-key="' + escA(key) + '">+</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+
+      var imgHTML = product.photo
+        ? '<img src="' + escA(product.photo) + '" alt="' + escA(displayName) + '" loading="lazy">'
+        : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#0d1f16;color:#3d6b52;font-size:2.4rem;font-weight:700;">' + esc((displayName || '?').charAt(0)) + '</div>';
+
+      var tagsAttr = (product.tags || []).join(',');
+      return '<div class="chef-card" data-category="' + escA(cat) + '" data-color="' + escA(product.color || '') + '" data-tags="' + escA(tagsAttr) + '">' +
+        '<div class="chef-card__image-wrap">' + imgHTML + '</div>' +
+        '<div class="chef-card__body">' +
+          '<h3 class="chef-card__name">' + esc(displayName) + '</h3>' +
+          (flavor ? '<p class="chef-card__flavor">' + esc(flavor) + '</p>' : '') +
+          (product.growDays ? '<span class="chef-card__grow-days">' + product.growDays + ' ' + esc(t('grow_days')) + '</span>' : '') +
+          '<div class="chef-card__sizes">' + sizesHTML + '</div>' +
+        '</div></div>';
+    }
+
+    /* ── Quantity handling ── */
+    grid.addEventListener('click', function(e) {
+      var minusBtn = e.target.closest('.chef-card__qty-minus');
+      var plusBtn = e.target.closest('.chef-card__qty-plus');
+      var row = e.target.closest('.chef-card__size-row');
+      if (!row) return;
+      e.preventDefault(); e.stopPropagation();
+
+      var key = (minusBtn || plusBtn || row).getAttribute('data-key');
+      if (!key && (minusBtn || plusBtn)) key = row.getAttribute('data-key');
+      var existing = cart.get(key);
+      var entry = existing || {
+        name: row.getAttribute('data-name'),
+        label: row.getAttribute('data-label'),
+        price: parseFloat(row.getAttribute('data-price')),
+        qty: 0
+      };
+
+      if (minusBtn) {
+        if (entry.qty > 0) entry.qty--;
+      } else if (plusBtn) {
+        entry.qty++;
+      } else {
+        /* row tap: first tap adds, subsequent taps increment */
+        entry.qty++;
+      }
+
+      if (entry.qty > 0) cart.set(key, entry);
+      else cart.delete(key);
+
+      var rowEl = document.getElementById('row-' + key);
+      if (rowEl) rowEl.classList.toggle('is-selected', entry.qty > 0);
+      var valEl = document.getElementById('qty-' + key);
+      if (valEl) valEl.textContent = entry.qty;
+      updateOrderBar();
+    });
+
+    /* ── Order bar ── */
+    function updateOrderBar() {
+      var totalItems = 0, totalEur = 0;
+      cart.forEach(function(e) { totalItems += e.qty; totalEur += e.qty * e.price; });
+
+      if (totalItems > 0) {
+        var word = totalItems === 1 ? t('product_singular') : t('product_plural');
+        orderInfo.innerHTML = '<span>' + totalItems + '</span> ' + word + ' &middot; <span>&euro;' + totalEur.toFixed(2) + '</span>';
+        orderBtn.disabled = false;
+        orderBtn.classList.add('has-items');
+      } else {
+        orderInfo.innerHTML = t('order_empty');
+        orderBtn.disabled = true;
+        orderBtn.classList.remove('has-items');
+      }
+    }
+
+    /* ── Filter bar (Flavor / Pairs with / Color / Mixes) ── */
+    function initFilters() {
+      var triggers = filterBar.querySelectorAll('.filter-trigger[data-panel]');
+      var panels = filterBar.querySelectorAll('.filter-panel');
+      var allChips = filterBar.querySelectorAll('.filter-chip');
+      var clearBtn = document.getElementById('filter-clear');
+      var activeFilters = { flavor: [], pairs: [], color: [], type: [] };
+
+      triggers.forEach(function (trigger) {
+        trigger.addEventListener('click', function () {
+          var panelId = 'panel-' + trigger.getAttribute('data-panel');
+          var panel = document.getElementById(panelId);
+          var wasOpen = trigger.classList.contains('is-open');
+          triggers.forEach(function (t) { t.classList.remove('is-open'); });
+          panels.forEach(function (p) { p.classList.remove('is-open'); });
+          if (!wasOpen && panel) {
+            trigger.classList.add('is-open');
+            panel.classList.add('is-open');
+          }
+        });
+      });
+
+      document.addEventListener('click', function (e) {
+        if (!e.target.closest('.filter-bar')) {
+          triggers.forEach(function (t) { t.classList.remove('is-open'); });
+          panels.forEach(function (p) { p.classList.remove('is-open'); });
+        }
+      });
+
+      allChips.forEach(function (chip) {
+        chip.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var group = chip.getAttribute('data-group');
+          var value = chip.getAttribute('data-value');
+          if (!group || !value) return;
+          var idx = activeFilters[group].indexOf(value);
+          if (idx !== -1) {
+            activeFilters[group].splice(idx, 1);
+            chip.classList.remove('is-active');
+          } else {
+            activeFilters[group].push(value);
+            chip.classList.add('is-active');
+          }
+          updateTriggerCounts();
+          applyFilters();
+        });
+      });
+
+      if (clearBtn) {
+        clearBtn.addEventListener('click', function () {
+          activeFilters = { flavor: [], pairs: [], color: [], type: [] };
+          allChips.forEach(function (c) { c.classList.remove('is-active'); });
+          triggers.forEach(function (t) { t.classList.remove('is-open', 'has-selection'); });
+          panels.forEach(function (p) { p.classList.remove('is-open'); });
+          updateTriggerCounts();
+          applyFilters();
+        });
+      }
+
+      function updateTriggerCounts() {
+        var hasAny = false;
+        triggers.forEach(function (trigger) {
+          var panelName = trigger.getAttribute('data-panel');
+          var count = activeFilters[panelName] ? activeFilters[panelName].length : 0;
+          var countEl = trigger.querySelector('.filter-trigger__count');
+          if (count > 0) {
+            trigger.classList.add('has-selection');
+            if (countEl) countEl.textContent = count;
+            hasAny = true;
+          } else {
+            trigger.classList.remove('has-selection');
+          }
+        });
+        if (activeFilters.type.length) hasAny = true;
+        if (clearBtn) {
+          if (hasAny) clearBtn.classList.add('is-visible');
+          else clearBtn.classList.remove('is-visible');
+        }
+      }
+
+      function applyFilters() {
+        var cards = grid.querySelectorAll('.chef-card');
+        cards.forEach(function (card) {
+          var show = true;
+          var cardTags = (card.getAttribute('data-tags') || '').split(',');
+          var cardColor = card.getAttribute('data-color') || '';
+          var cardCategory = card.getAttribute('data-category') || '';
+
+          if (activeFilters.flavor.length) {
+            if (!activeFilters.flavor.some(function (f) { return cardTags.indexOf(f) !== -1; })) show = false;
+          }
+          if (activeFilters.pairs.length) {
+            if (!activeFilters.pairs.some(function (p) { return cardTags.indexOf(p) !== -1; })) show = false;
+          }
+          if (activeFilters.color.length) {
+            if (activeFilters.color.indexOf(cardColor) === -1) show = false;
+          }
+          if (activeFilters.type.length) {
+            if (activeFilters.type.indexOf(cardCategory) === -1) show = false;
+          }
+          card.style.display = show ? '' : 'none';
+        });
+      }
+    }
+
+    /* ── Order flow ── */
+    orderBtn.addEventListener('click', function() { if (!orderBtn.disabled) { modal.classList.add('is-visible'); restaurantInput.focus(); } });
+    modalCancel.addEventListener('click', function() { modal.classList.remove('is-visible'); });
+    modalSend.addEventListener('click', sendOrder);
+    restaurantInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); sendOrder(); } });
+
+    function sendOrder() {
+      var restaurant = restaurantInput.value.trim() || t('wa_unknown');
+      var person = personInput.value.trim();
+      var position = positionInput.value.trim();
+      modal.classList.remove('is-visible');
+
+      var lines = [t('wa_header') + ' ' + restaurant, ''];
+      if (person) lines.push(t('wa_contact') + ': ' + person + (position ? ' (' + position + ')' : ''));
+      else if (position) lines.push(t('wa_position') + ': ' + position);
+      if (person || position) lines.push('');
+
+      var totalEur = 0;
+      cart.forEach(function(e) { var lt = e.qty * e.price; totalEur += lt; lines.push(e.qty + 'x ' + e.name + ' (' + e.label + ') \u2014 \u20AC' + lt.toFixed(2)); });
+      lines.push('', t('wa_total') + ': \u20AC' + totalEur.toFixed(2) + ' ' + t('wa_vat'));
+      window.open('https://wa.me/' + WHATSAPP_NUMBER + '?text=' + encodeURIComponent(lines.join('\n')), '_blank');
+    }
+
+    modal.addEventListener('click', function(e) { if (e.target === modal) modal.classList.remove('is-visible'); });
+
+    /* ── Init ── */
+    applyLang();
+    loadProducts();
+  })();
+  </script>
+  <script src="js/main.js"></script>
+</body>
+</html>
