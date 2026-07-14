@@ -14,6 +14,7 @@ export default function FieldMapPage() {
   const [tappedProspect, setTappedProspect] = useState<Prospect | null>(null);
   const [removingProspect, setRemovingProspect] = useState(false);
   const [nearbyBanner, setNearbyBanner] = useState<NearbyPlace | null>(null);
+  const [focusPoint, setFocusPoint] = useState<{ lat: number; lng: number } | null>(null);
 
   const handleNearbyPlace = useCallback((place: NearbyPlace) => {
     setNearbyBanner(place);
@@ -43,6 +44,28 @@ export default function FieldMapPage() {
   const handleSelect = (loc: Partial<MapLocation>) => {
     setFormLoc(loc as VisitFormLoc);
     setShowForm(true);
+  };
+
+  // After saving a visit, keep the map on that place (zoomed in) instead of
+  // resetting to GPS/last view — Ron's ask: "keep me at the same location
+  // so I see the mark on the map, zoomed in enough to see it."
+  const handleFormClose = async (savedLoc?: { id: string; lat?: number | null; lng?: number | null }) => {
+    setShowForm(false);
+    await load();
+    if (!savedLoc) return;
+    if (savedLoc.lat != null && savedLoc.lng != null) {
+      setFocusPoint({ lat: savedLoc.lat, lng: savedLoc.lng });
+      return;
+    }
+    // New place saved without coords on hand (typed manually, no map/search
+    // origin) — the refetch above may have a geocoded lat/lng for it now.
+    setLocations(prev => {
+      const match = prev.find(l => l.id === savedLoc.id);
+      if (match?.lat != null && match?.lng != null) {
+        setFocusPoint({ lat: match.lat, lng: match.lng });
+      }
+      return prev;
+    });
   };
 
   const removeProspect = async () => {
@@ -85,6 +108,7 @@ export default function FieldMapPage() {
           prospects={prospects}
           onSelect={handleSelect}
           onProspectTap={setTappedProspect}
+          focusPoint={focusPoint}
         />
       )}
 
@@ -114,7 +138,7 @@ export default function FieldMapPage() {
       {showForm && (
         <VisitForm
           loc={formLoc}
-          onClose={() => { setShowForm(false); load(); }}
+          onClose={handleFormClose}
           onSaved={() => load()}
         />
       )}

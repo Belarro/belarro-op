@@ -57,11 +57,13 @@ export default function FieldMap({
   prospects,
   onSelect,
   onProspectTap,
+  focusPoint,
 }: {
   locations: MapLocation[];
   prospects: Prospect[];
   onSelect: (loc: Partial<MapLocation>) => void;
   onProspectTap: (p: Prospect) => void;
+  focusPoint?: { lat: number; lng: number } | null;
 }) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -356,6 +358,15 @@ export default function FieldMap({
     locations.forEach(plotLocation);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locations, mapReady]);
+
+  // After a visit save, re-center on that place and zoom in so the rep sees
+  // the pin land right where they are — don't touch center/zoom otherwise.
+  useEffect(() => {
+    if (!mapReady || !focusPoint || !mapInstanceRef.current) return;
+    mapInstanceRef.current.setCenter(focusPoint);
+    mapInstanceRef.current.setZoom(18);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusPoint, mapReady]);
 
   // Re-plot prospect (blue, "To Visit") pins whenever prospects change.
   useEffect(() => {

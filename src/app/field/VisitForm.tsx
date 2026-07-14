@@ -99,7 +99,7 @@ function fmtHistoryDate(iso: string) {
   return new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-export default function VisitForm({ loc, onClose, onSaved }: { loc: VisitFormLoc | null; onClose: () => void; onSaved: () => void }) {
+export default function VisitForm({ loc, onClose, onSaved }: { loc: VisitFormLoc | null; onClose: (savedLoc?: { id: string; lat?: number | null; lng?: number | null }) => void; onSaved: () => void }) {
   const isNew = !loc?.id;
   // Mobile field must start blank for a new place — Ron wants to type the
   // contact's actual mobile number, not have the restaurant's Google-listed
@@ -300,6 +300,16 @@ export default function VisitForm({ loc, onClose, onSaved }: { loc: VisitFormLoc
     }
   };
 
+  // If a visit was saved this session, hand the location back to the map so
+  // it can re-center/zoom on the pin instead of resetting to GPS/last view.
+  const handleClose = () => {
+    if (savedSuccessfully && savedLocId) {
+      onClose({ id: savedLocId, lat: loc?.lat, lng: loc?.lng });
+    } else {
+      onClose();
+    }
+  };
+
   const doArchive = async () => {
     if (!savedLocId && !loc?.id) return;
     setBusy(true);
@@ -345,7 +355,7 @@ export default function VisitForm({ loc, onClose, onSaved }: { loc: VisitFormLoc
                 </div>
               )}
             </div>
-            <button type="button" onClick={onClose} className="text-gray-400 font-bold text-xl px-2 shrink-0">✕</button>
+            <button type="button" onClick={handleClose} className="text-gray-400 font-bold text-xl px-2 shrink-0">✕</button>
           </div>
 
           <form onSubmit={save} className="space-y-4">
