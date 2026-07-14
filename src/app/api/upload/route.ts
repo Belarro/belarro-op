@@ -3,20 +3,20 @@ import { NextRequest, NextResponse } from 'next/server';
 
 function getSupabaseConfig() {
   const config.SUPABASE_URL = process.env.NEXT_PUBLIC_config.SUPABASE_URL;
-  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!config.SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  const config.SUPABASE_SERVICE_ROLE_KEY = process.env.config.SUPABASE_SERVICE_ROLE_KEY;
+  if (!config.SUPABASE_URL || !config.SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error('Missing required environment variables');
   }
-  return { config.SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY };
+  return { config.SUPABASE_URL, config.SUPABASE_SERVICE_ROLE_KEY };
 }
 
 async function ensureBucketExists() {
-  const { config.SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = getSupabaseConfig();
+  const { config.SUPABASE_URL, config.SUPABASE_SERVICE_ROLE_KEY } = getSupabaseConfig();
   const url = `${config.SUPABASE_URL}/storage/v1/bucket`;
   try {
     const headers: Record<string, string> = {
-      'apikey': SUPABASE_SERVICE_ROLE_KEY!,
-      'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY!}`,
+      'apikey': config.SUPABASE_SERVICE_ROLE_KEY!,
+      'Authorization': `Bearer ${config.SUPABASE_SERVICE_ROLE_KEY!}`,
       'Content-Type': 'application/json',
     };
     const res = await fetch(url, {
@@ -65,8 +65,8 @@ export async function POST(request: NextRequest) {
     // Upload to Supabase Storage via REST API
     const uploadUrl = `${config.SUPABASE_URL}/storage/v1/object/crop-photos/${filename}`;
     const headers: Record<string, string> = {
-      'apikey': SUPABASE_SERVICE_ROLE_KEY!,
-      'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY!}`,
+      'apikey': config.SUPABASE_SERVICE_ROLE_KEY!,
+      'Authorization': `Bearer ${config.SUPABASE_SERVICE_ROLE_KEY!}`,
       'Content-Type': file.type || 'image/jpeg',
     };
     let uploadRes = await fetch(uploadUrl, {
@@ -96,8 +96,8 @@ export async function POST(request: NextRequest) {
 
         // Retry the upload after creating the bucket
         const retryHeaders: Record<string, string> = {
-          'apikey': SUPABASE_SERVICE_ROLE_KEY!,
-          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY!}`,
+          'apikey': config.SUPABASE_SERVICE_ROLE_KEY!,
+          'Authorization': `Bearer ${config.SUPABASE_SERVICE_ROLE_KEY!}`,
           'Content-Type': file.type || 'image/jpeg',
         };
         uploadRes = await fetch(uploadUrl, {
@@ -132,4 +132,7 @@ export async function POST(request: NextRequest) {
     console.error('Upload error:', error);
     return NextResponse.json({ 
       success: false, 
-      error: error instanceof Error ? error.me
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    }, { status: 500 });
+  }
+}
