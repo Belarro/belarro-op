@@ -177,6 +177,10 @@ describe('AdminCropsPage', () => {
           ok: true,
         })
         .mockResolvedValueOnce({
+          json: async () => ({ success: true, data: [] }),
+          ok: true,
+        })
+        .mockResolvedValueOnce({
           json: async () => ({
             success: true,
             data: {
@@ -200,7 +204,7 @@ describe('AdminCropsPage', () => {
 
       await waitFor(() => {
         expect(global.fetch).toHaveBeenCalledWith(
-          expect.stringContaining('/api/crops?id=1')
+          expect.stringContaining('/api/crops/1')
         );
       });
     });
@@ -331,6 +335,10 @@ describe('AdminCropsPage', () => {
           ok: true,
         })
         .mockResolvedValueOnce({
+          json: async () => ({ success: true, data: [] }),
+          ok: true,
+        })
+        .mockResolvedValueOnce({
           json: async () => ({
             success: true,
             data: {
@@ -342,7 +350,8 @@ describe('AdminCropsPage', () => {
                 soak_enabled: false,
                 stack_enabled: true,
                 stack_days: 2,
-                growth_env_days: 6,
+                light_enabled: true,
+                light_days: 6,
               },
               variants: [],
             },
@@ -381,6 +390,10 @@ describe('AdminCropsPage', () => {
               },
             ],
           }),
+          ok: true,
+        })
+        .mockResolvedValueOnce({
+          json: async () => ({ success: true, data: [] }),
           ok: true,
         })
         .mockResolvedValueOnce({
@@ -433,6 +446,10 @@ describe('AdminCropsPage', () => {
           ok: true,
         })
         .mockResolvedValueOnce({
+          json: async () => ({ success: true, data: [] }),
+          ok: true,
+        })
+        .mockResolvedValueOnce({
           json: async () => ({
             success: true,
             data: {
@@ -457,6 +474,9 @@ describe('AdminCropsPage', () => {
 
       const editButton = await screen.findByText('Edit');
       await userEvent.click(editButton);
+
+      const addNewSizeButton = await screen.findByText('+ Add New Size');
+      await userEvent.click(addNewSizeButton);
 
       const sizeNameInput = screen.getByPlaceholderText('e.g., 600g');
       const gramsInput = screen.getByPlaceholderText('e.g., 600');
@@ -598,7 +618,7 @@ describe('AdminCropsPage', () => {
       });
     });
 
-    it('should validate growth environment days', async () => {
+    it('should validate stack days when stack is enabled', async () => {
       (global.fetch as jest.Mock)
         .mockResolvedValueOnce({
           json: async () => ({
@@ -616,6 +636,10 @@ describe('AdminCropsPage', () => {
           ok: true,
         })
         .mockResolvedValueOnce({
+          json: async () => ({ success: true, data: [] }),
+          ok: true,
+        })
+        .mockResolvedValueOnce({
           json: async () => ({
             success: true,
             data: {
@@ -624,8 +648,10 @@ describe('AdminCropsPage', () => {
               name_de: 'Test',
               status: 'active',
               procedure: {
-                growth_env_type: 'light',
-                growth_env_days: 0,
+                stack_enabled: true,
+                stack_days: undefined,
+                light_enabled: true,
+                light_days: 6,
               },
               variants: [],
             },
@@ -646,7 +672,7 @@ describe('AdminCropsPage', () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText(/Growth environment days must be greater than 0/i)
+          screen.getByText(/Stack days required if stack is enabled/i)
         ).toBeInTheDocument();
       });
     });

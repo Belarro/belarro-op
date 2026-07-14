@@ -1,19 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchFromSupabase } from '@/lib/supabase';
+import { isOldLead } from '@/lib/followups';
 // import removed
-
-const OLD_LEAD_DAYS = 30;
-
-function isOldLead(timestamp: string | null, createdAt: string | null): boolean {
-  const dateStr = timestamp || createdAt;
-  if (!dateStr) return true;
-  const cleaned = String(dateStr).trim()
-    .replace(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/, '$3-$2-$1')
-    .replace(' ', 'T');
-  const date = new Date(cleaned);
-  if (isNaN(date.getTime())) return true;
-  return (Date.now() - date.getTime()) / (1000 * 60 * 60 * 24) > OLD_LEAD_DAYS;
-}
 
 const NEW_STAGES = [
   { stage: 1, follow_up_number: 1, follow_up_days: 0,  offset: 0 },

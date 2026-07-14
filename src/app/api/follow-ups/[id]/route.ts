@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchFromSupabase } from '@/lib/supabase';
+import { isOldLead } from '@/lib/followups';
 // import removed
 
 type Params = {
@@ -23,19 +24,6 @@ function addBusinessDays(from: Date, days: number): Date {
 // 4 stages (2h/2d/5d/30d, no 14-day stage). See FOLLOWUP_COPY_V2.md.
 const NEW_STAGE_GAPS: Record<number, number> = { 1: 0, 2: 2, 3: 5, 4: 14, 5: 30 };
 const REENGAGE_STAGE_GAPS: Record<number, number> = { 1: 0, 2: 2, 3: 5, 4: 30 };
-
-const OLD_LEAD_DAYS = 30;
-
-function isOldLead(timestamp: string | null, createdAt: string | null): boolean {
-  const dateStr = timestamp || createdAt;
-  if (!dateStr) return true;
-  const cleaned = String(dateStr).trim()
-    .replace(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/, '$3-$2-$1')
-    .replace(' ', 'T');
-  const date = new Date(cleaned);
-  if (isNaN(date.getTime())) return true;
-  return (Date.now() - date.getTime()) / (1000 * 60 * 60 * 24) > OLD_LEAD_DAYS;
-}
 
 export async function DELETE(_request: NextRequest, props: Params) {
   try {

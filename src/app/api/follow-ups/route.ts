@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchFromSupabase } from '@/lib/supabase';
+import { isOldLead } from '@/lib/followups';
 // import removed
-
-const OLD_LEAD_DAYS = 30;
 
 // ─── TEMPLATES ───────────────────────────────────────────────────────────────
 // Source of truth is now the belarro_v4_followup_template DB table (Part 3 of
@@ -61,18 +60,6 @@ async function buildMessage(flow: 'new' | 'reengage', stage: number, lang: strin
 function parsePhone(raw: string | null): string | null {
   if (!raw) return null;
   return raw.replace(/\s+/g, '').replace(/^00/, '+');
-}
-
-function isOldLead(timestamp: string | null, createdAt: string | null): boolean {
-  const dateStr = timestamp || createdAt;
-  if (!dateStr) return true;
-  const cleaned = String(dateStr).trim()
-    .replace(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/, '$3-$2-$1')
-    .replace(' ', 'T');
-  const date = new Date(cleaned);
-  if (isNaN(date.getTime())) return true;
-  const diffDays = (Date.now() - date.getTime()) / (1000 * 60 * 60 * 24);
-  return diffDays > OLD_LEAD_DAYS;
 }
 
 // ─── GET ─────────────────────────────────────────────────────────────────────
