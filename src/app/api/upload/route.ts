@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 // import removed
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error('Missing required environment variables');
+function getSupabaseConfig() {
+  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('Missing required environment variables');
+  }
+  return { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY };
 }
 
 async function ensureBucketExists() {
+  const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = getSupabaseConfig();
   const url = `${SUPABASE_URL}/storage/v1/bucket`;
   try {
     const headers: Record<string, string> = {
