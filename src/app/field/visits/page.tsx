@@ -6,6 +6,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import VisitForm, { VisitFormLoc } from '../VisitForm';
+import { useBackToClose } from '../useBackToClose';
 
 interface Loc {
   id: string;
@@ -51,6 +52,10 @@ export default function FieldVisitsPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Android hardware back button closes the open visit form instead of
+  // exiting the whole app.
+  useBackToClose(showForm, () => { setShowForm(false); load(); });
 
   const filtered = useMemo(() => {
     if (!search.trim()) return locations;

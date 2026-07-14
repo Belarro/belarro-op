@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import FieldMap, { MapLocation, Prospect } from './FieldMap';
 import VisitForm, { VisitFormLoc } from '../VisitForm';
 import { useNearbyDetection, NearbyPlace } from '../useNearbyDetection';
+import { useBackToClose } from '../useBackToClose';
 
 export default function FieldMapPage() {
   const [locations, setLocations] = useState<MapLocation[]>([]);
@@ -22,6 +23,11 @@ export default function FieldMapPage() {
   }, []);
 
   useNearbyDetection({ onNearbyPlace: handleNearbyPlace, enabled: true });
+
+  // Android hardware back button closes the open sheet/form instead of
+  // exiting the whole app — Ron's ask.
+  useBackToClose(showForm, () => { setShowForm(false); load(); });
+  useBackToClose(!!tappedProspect && !showForm, () => setTappedProspect(null));
 
   const load = useCallback(async () => {
     setLoading(true);
