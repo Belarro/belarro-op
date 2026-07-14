@@ -93,7 +93,7 @@ function fmtHistoryDate(iso: string) {
   return new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-export default function VisitForm({ loc, onClose, onSaved }: { loc: VisitFormLoc | null; onClose: (savedLoc?: { id: string; lat?: number | null; lng?: number | null }) => void; onSaved: () => void }) {
+export default function VisitForm({ loc, onClose, onSaved, closeOnSave }: { loc: VisitFormLoc | null; onClose: (savedLoc?: { id: string; lat?: number | null; lng?: number | null }) => void; onSaved: () => void; closeOnSave?: boolean }) {
   const isNew = !loc?.id;
   // Mobile field must start blank for a new place — Ron wants to type the
   // contact's actual mobile number, not have the restaurant's Google-listed
@@ -224,6 +224,15 @@ export default function VisitForm({ loc, onClose, onSaved }: { loc: VisitFormLoc
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ location_id: newLocId }),
         }).catch(() => {});
+      }
+      // Ron's call for the map flow: go straight back to the map on this pin
+      // instead of the quick-send message preview. The Visits list still
+      // wants the preview (P0-2), so this only applies when the caller
+      // (map) asks for it via closeOnSave.
+      if (closeOnSave) {
+        onSaved();
+        onClose(newLocId ? { id: newLocId, lat: loc?.lat, lng: loc?.lng } : undefined);
+        return;
       }
       setSavedSuccessfully(true);
     } finally {

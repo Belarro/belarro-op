@@ -140,6 +140,7 @@ export default function FieldMapPage() {
           loc={formLoc}
           onClose={handleFormClose}
           onSaved={() => load()}
+          closeOnSave
         />
       )}
 
