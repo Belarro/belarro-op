@@ -17,6 +17,8 @@ const getFlyerUrls = () => {
 // refresh tokens expired every 7 days while the Cloud Console app sat in
 // "Testing" publishing status. An App Password never expires and needs no
 // reconnecting, no Settings page, no token table.
+// Auth user = Ron's main Google account; From = hello@belarro.com, which is
+// a verified "Send mail as" alias on that account, so Gmail accepts it.
 function getTransport() {
   const user = process.env.GMAIL_SMTP_USER;
   const pass = process.env.GMAIL_SMTP_APP_PASSWORD;
@@ -30,6 +32,8 @@ function getTransport() {
     auth: { user, pass },
   });
 }
+
+const FROM_ADDRESS = process.env.GMAIL_SMTP_FROM || 'hello@belarro.com';
 
 function buildHtml(body: string, flyerUrl: string): string {
   const htmlBody = body
@@ -93,7 +97,7 @@ export async function POST(request: NextRequest) {
 
     const transport = getTransport();
     await transport.sendMail({
-      from: `"Belarro Microgreens" <${process.env.GMAIL_SMTP_USER}>`,
+      from: `"Belarro Microgreens" <${FROM_ADDRESS}>`,
       to,
       subject,
       text: body,

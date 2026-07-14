@@ -2,17 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 // import removed
 
 function getSupabaseConfig() {
-  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const config.SUPABASE_URL = process.env.NEXT_PUBLIC_config.SUPABASE_URL;
   const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  if (!config.SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error('Missing required environment variables');
   }
-  return { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY };
+  return { config.SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY };
 }
 
 async function ensureBucketExists() {
-  const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = getSupabaseConfig();
-  const url = `${SUPABASE_URL}/storage/v1/bucket`;
+  const { config.SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = getSupabaseConfig();
+  const url = `${config.SUPABASE_URL}/storage/v1/bucket`;
   try {
     const headers: Record<string, string> = {
       'apikey': SUPABASE_SERVICE_ROLE_KEY!,
@@ -46,6 +46,7 @@ export async function POST(request: NextRequest) {
   try {
     // auth handled by middleware
     // if (!auth.ok) return auth.response;
+    const config = getSupabaseConfig();
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
 
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest) {
     const filename = `${timestamp}_${sanitizedName}`;
 
     // Upload to Supabase Storage via REST API
-    const uploadUrl = `${SUPABASE_URL}/storage/v1/object/crop-photos/${filename}`;
+    const uploadUrl = `${config.SUPABASE_URL}/storage/v1/object/crop-photos/${filename}`;
     const headers: Record<string, string> = {
       'apikey': SUPABASE_SERVICE_ROLE_KEY!,
       'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY!}`,
@@ -118,7 +119,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get public URL
-    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/crop-photos/${filename}`;
+    const publicUrl = `${config.SUPABASE_URL}/storage/v1/object/public/crop-photos/${filename}`;
 
     return NextResponse.json({
       success: true,
@@ -131,7 +132,4 @@ export async function POST(request: NextRequest) {
     console.error('Upload error:', error);
     return NextResponse.json({ 
       success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
-    }, { status: 500 });
-  }
-}
+      error: error instanceof Error ? error.me
