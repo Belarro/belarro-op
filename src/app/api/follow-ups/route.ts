@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchFromSupabase } from '@/lib/supabase';
-import { isOldLead } from '@/lib/followups';
+import { isOldLead, seedFollowUpsForLocation } from '@/lib/followups';
 // import removed
 
 // ─── TEMPLATES ───────────────────────────────────────────────────────────────
@@ -183,45 +183,9 @@ export async function POST(request: NextRequest) {
     const { location_id, visited_at } = await request.json();
     if (!location_id) return NextResponse.json({ success: false, error: 'location_id required' }, { status: 400 });
 
-    const existing = await fetchFromSupabase(
-      `/belarro_v4_follow_up?location_id=eq.${location_id}&status=eq.pending&select=id&limit=1`
-    );
-    if (existing && existing.length > 0) {
+    const { created } = await seedFollowUpsForLocation(location_id, visited_at);
+    if (!created) {
       return NextResponse.json({ success: false, error: 'Follow-ups already exist' }, { status: 409 });
-    }
-
-    const base = new Date(visited_at || new Date()).getTime();
-    const old = isOldLead(visited_at, null);
-
-    // New-lead: 5 stages at 2h/2d/5d/14d/30d. Re-engage: 4 stages at
-    // 2h/2d/5d/30d — the 14-day stage is dropped entirely (not left blank).
-    // Re-engage is measured from now (send time), not from the old visit date.
-    const stages = old ? [
-      { stage: 1, follow_up_number: 1, follow_up_days: 0,  offset: 2 * 60 * 60 * 1000 },
-      { stage: 2, follow_up_number: 2, follow_up_days: 2,  offset: 2  * 24 * 60 * 60 * 1000 },
-      { stage: 3, follow_up_number: 3, follow_up_days: 5,  offset: 5  * 24 * 60 * 60 * 1000 },
-      { stage: 4, follow_up_number: 4, follow_up_days: 30, offset: 30 * 24 * 60 * 60 * 1000 },
-    ] : [
-      { stage: 1, follow_up_number: 1, follow_up_days: 0,  offset: 2 * 60 * 60 * 1000 },
-      { stage: 2, follow_up_number: 2, follow_up_days: 2,  offset: 2  * 24 * 60 * 60 * 1000 },
-      { stage: 3, follow_up_number: 3, follow_up_days: 5,  offset: 5  * 24 * 60 * 60 * 1000 },
-      { stage: 4, follow_up_number: 4, follow_up_days: 14, offset: 14 * 24 * 60 * 60 * 1000 },
-      { stage: 5, follow_up_number: 5, follow_up_days: 30, offset: 30 * 24 * 60 * 60 * 1000 },
-    ];
-
-    for (const s of stages) {
-      await fetchFromSupabase('/belarro_v4_follow_up', {
-        method: 'POST',
-        body: JSON.stringify({
-          id: crypto.randomUUID(),
-          location_id,
-          follow_up_number: s.follow_up_number,
-          follow_up_days: s.follow_up_days,
-          stage: s.stage,
-          due_date: new Date(base + s.offset).toISOString(),
-          status: 'pending',
-        }),
-      });
     }
 
     return NextResponse.json({ success: true });

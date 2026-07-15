@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchFromSupabase } from '@/lib/supabase';
 import { verifySession } from '@/lib/session';
+import { seedFollowUpsForLocation } from '@/lib/followups';
 
 /**
  * Field visits — replaces the Google Sheet as the store for field work.
@@ -168,6 +169,16 @@ export async function POST(request: NextRequest) {
       }
       locId = created?.[0]?.id;
       if (!locId) return NextResponse.json({ success: false, error: 'Failed to create location' }, { status: 500 });
+
+      // Brand-new place logged from the field — seed its follow-up drip the
+      // same way the admin side does, so it shows up in admin/follow-ups
+      // without a separate manual step. Best-effort: a seeding failure must
+      // not fail the visit save itself (the place/visit is already saved).
+      try {
+        await seedFollowUpsForLocation(locId, row.timestamp as string);
+      } catch (seedErr) {
+        console.error('Follow-up seeding failed for new location', locId, seedErr);
+      }
     } else {
       // Existing place: update the master record with the latest state.
       // Un-archive on a fresh visit — being visited again means it's back
