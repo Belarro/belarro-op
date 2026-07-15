@@ -6,7 +6,14 @@ export async function GET() {
   try {
     // auth handled by middleware
     // if (!auth.ok) return auth.response;
-    const data = await fetchFromSupabase('/testimonials?order=sort_order.asc');
+    // deleted_at column added by 20260715_testimonials_soft_delete.sql —
+    // fall back to the pre-migration query if it hasn't been pasted yet.
+    let data;
+    try {
+      data = await fetchFromSupabase('/testimonials?deleted_at=is.null&order=sort_order.asc');
+    } catch {
+      data = await fetchFromSupabase('/testimonials?order=sort_order.asc');
+    }
     return NextResponse.json({ success: true, data: data || [] });
   } catch (error) {
     return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 });

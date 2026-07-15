@@ -65,12 +65,21 @@ export default function UsersPage() {
   };
 
   const handleRoleChange = async (id: string, role: string) => {
-    await fetch('/api/users', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, role }),
-    });
-    load();
+    try {
+      const res = await fetch('/api/users', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, role }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) {
+        alert(json?.error || `Role change failed (${res.status})`);
+      }
+    } catch {
+      alert('Network error — role change failed');
+    } finally {
+      load();
+    }
   };
 
   const handleDelete = async (u: AdminUser) => {

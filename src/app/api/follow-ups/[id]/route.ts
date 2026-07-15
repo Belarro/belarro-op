@@ -26,10 +26,10 @@ const NEW_STAGE_GAPS: Record<number, number> = { 1: 0, 2: 2, 3: 5, 4: 14, 5: 30 
 const REENGAGE_STAGE_GAPS: Record<number, number> = { 1: 0, 2: 2, 3: 5, 4: 30 };
 
 export async function DELETE(_request: NextRequest, props: Params) {
+  const { id } = await props.params;
   try {
     // auth handled by middleware
     // if (!auth.ok) return auth.response;
-    const { id } = await props.params;
 
     // Get the follow-up to find location_id
     const current = await fetchFromSupabase(`/belarro_v4_follow_up?id=eq.${id}&select=location_id`);
@@ -57,7 +57,7 @@ export async function DELETE(_request: NextRequest, props: Params) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Follow-up DELETE error:', error);
+    console.error(`Follow-up DELETE error for id=${id}:`, error);
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }

@@ -78,12 +78,19 @@ export default function FieldMapPage() {
     if (!tappedProspect) return;
     setRemovingProspect(true);
     try {
-      await fetch('/api/field/prospects', {
+      const res = await fetch('/api/field/prospects', {
         method: 'DELETE', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: tappedProspect.id }),
       });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) {
+        alert(json?.error || 'Remove failed — try again');
+        return;
+      }
       setTappedProspect(null);
       load();
+    } catch {
+      alert('Network error — remove failed');
     } finally {
       setRemovingProspect(false);
     }

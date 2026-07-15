@@ -53,6 +53,7 @@ export default function OrdersPage() {
   const [editSwap, setEditSwap] = useState<Record<string, string>>({}); // lineId → new variant_id
   const [submitting, setSubmitting] = useState(false);
   const [pausingId, setPausingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const fetchOrders = async () => {
     try {
@@ -204,7 +205,13 @@ export default function OrdersPage() {
 
   const handleDeleteLine = async (id: string) => {
     if (!confirm('Remove this crop from the order?')) return;
-    await fetch(`/api/orders/${id}`, { method: 'DELETE' });
+    setActionError(null);
+    const delRes = await fetch(`/api/orders/${id}`, { method: 'DELETE' });
+    const delJson = await delRes.json().catch(() => null);
+    if (!delRes.ok || !delJson?.success) {
+      setActionError(delJson?.error || `Delete failed (${delRes.status})`);
+      return;
+    }
     const res = await fetch('/api/orders');
     const json = await res.json();
     if (json.success) {
@@ -257,6 +264,13 @@ export default function OrdersPage() {
           + New Order
         </button>
       </div>
+
+      {actionError && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-600 font-semibold flex items-center justify-between">
+          ✗ {actionError}
+          <button onClick={() => setActionError(null)} className="text-red-400 hover:text-red-600 font-bold px-2">✕</button>
+        </div>
+      )}
 
       {/* Search */}
       <input

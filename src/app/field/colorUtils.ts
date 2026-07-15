@@ -23,6 +23,8 @@ export const MANUAL_COLOR_OPTIONS = [
 export function getAutoColor(interestLevel: string | null | undefined, sampleGiven: string | boolean | null | undefined): string {
   const given = sampleGiven === 'YES' || sampleGiven === true;
   switch (interestLevel) {
+    case 'Lead':
+      return PIN_COLORS.BLUE;
     case 'Interested':
       return given ? PIN_COLORS.ORANGE : PIN_COLORS.BLUE;
     case 'Not Interested':
@@ -43,7 +45,7 @@ export function getPinColor(loc: { pin_color?: string | null; interest_level?: s
 
 export function getColorLabel(color: string): string {
   switch (color) {
-    case PIN_COLORS.BLUE: return 'Bring samples';
+    case PIN_COLORS.BLUE: return 'Lead — check out later';
     case PIN_COLORS.ORANGE: return 'Hot lead';
     case PIN_COLORS.GREEN: return 'Closed deal';
     case PIN_COLORS.RED: return 'Not interested';
@@ -54,7 +56,7 @@ export function getColorLabel(color: string): string {
 
 export const LEGEND_ITEMS = [
   { color: PIN_COLORS.GRAY, label: 'Pending' },
-  { color: PIN_COLORS.BLUE, label: 'Bring samples' },
+  { color: PIN_COLORS.BLUE, label: 'Lead — check out later' },
   { color: PIN_COLORS.ORANGE, label: 'Hot lead' },
   { color: PIN_COLORS.YELLOW, label: 'Follow up' },
   { color: PIN_COLORS.RED, label: 'Not interested' },

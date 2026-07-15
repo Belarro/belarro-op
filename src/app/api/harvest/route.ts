@@ -70,7 +70,12 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      allocatedToOrders = Math.min(yieldGrams, totalNeeded);
+      // Running remainder of yield not yet claimed by an earlier order in
+      // this loop — was previously computed once before the loop and never
+      // decremented, so every order's allocated_grams came out as
+      // Math.min(gramsNeeded, yieldGrams - min(yieldGrams,totalNeeded)),
+      // i.e. 0 whenever yield fell short of total demand.
+      let remainingYield = yieldGrams;
 
       // Create fulfillment records and update orders
       for (const oid of order_ids) {
@@ -78,8 +83,10 @@ export async function POST(request: NextRequest) {
         const v = o ? varMap.get(o.product_variant_id) : null;
         if (o && v) {
           const gramsNeeded = o.quantity * v.size_grams;
-          const allocated = Math.min(gramsNeeded, yieldGrams - allocatedToOrders);
-          
+          const allocated = Math.max(0, Math.min(gramsNeeded, remainingYield));
+          remainingYield -= allocated;
+          allocatedToOrders += allocated;
+
           try {
             // Create order fulfillment
             await fetchFromSupabase('/belarro_v4_order_fulfillment', {

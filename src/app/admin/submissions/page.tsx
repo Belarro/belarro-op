@@ -56,6 +56,7 @@ export default function SubmissionsPage() {
   const [filter, setFilter] = useState<'all' | 'new' | 'start' | 'contact'>('all');
   const [selected, setSelected] = useState<Submission | null>(null);
   const [updating, setUpdating] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const fetch_ = async () => {
     setLoading(true);
@@ -72,17 +73,38 @@ export default function SubmissionsPage() {
 
   const updateStatus = async (id: string, status: string) => {
     setUpdating(true);
-    await fetch(`/api/submissions/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
-    setSubmissions(prev => prev.map(s => s.id === id ? { ...s, status: status as any } : s));
-    if (selected?.id === id) setSelected(prev => prev ? { ...prev, status: status as any } : null);
-    setUpdating(false);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/submissions/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) {
+        setActionError(json?.error || `Status update failed (${res.status})`);
+        return;
+      }
+      setSubmissions(prev => prev.map(s => s.id === id ? { ...s, status: status as any } : s));
+      if (selected?.id === id) setSelected(prev => prev ? { ...prev, status: status as any } : null);
+    } catch {
+      setActionError('Network error — status not updated');
+    } finally {
+      setUpdating(false);
+    }
   };
 
   const delete_ = async (id: string) => {
     if (!confirm('Delete this submission?')) return;
-    await fetch(`/api/submissions/${id}`, { method: 'DELETE' });
-    setSubmissions(prev => prev.filter(s => s.id !== id));
-    if (selected?.id === id) setSelected(null);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/submissions/${id}`, { method: 'DELETE' });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) {
+        setActionError(json?.error || `Delete failed (${res.status})`);
+        return;
+      }
+      setSubmissions(prev => prev.filter(s => s.id !== id));
+      if (selected?.id === id) setSelected(null);
+    } catch {
+      setActionError('Network error — delete failed');
+    }
   };
 
   const filtered = submissions.filter(s => {
@@ -106,6 +128,13 @@ export default function SubmissionsPage() {
         </div>
         <button onClick={fetch_} className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50">Refresh</button>
       </div>
+
+      {actionError && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-600 font-semibold flex items-center justify-between">
+          ✗ {actionError}
+          <button onClick={() => setActionError(null)} className="text-red-400 hover:text-red-600 font-bold px-2">✕</button>
+        </div>
+      )}
 
       {/* Filter tabs */}
       <div className="flex gap-1 p-1 bg-gray-100 rounded-xl w-fit">

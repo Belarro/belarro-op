@@ -54,9 +54,9 @@ const BUSINESS_TYPES = [
   'Canteen/Kantine', 'Other',
 ];
 
-const INTEREST_LEVELS = ['Follow Up', 'Closed Deal', 'Not Interested'];
+const INTEREST_LEVELS = ['Lead', 'Follow Up', 'Closed Deal', 'Not Interested'];
 const OUTCOME_COLOR: Record<string, string> = {
-  'Follow Up': '#f59e0b', 'Closed Deal': '#16a34a', 'Not Interested': '#dc2626',
+  'Lead': '#2196F3', 'Follow Up': '#f59e0b', 'Closed Deal': '#16a34a', 'Not Interested': '#dc2626',
 };
 
 // Quick tap-chips to capture what the chef said without typing — stored
@@ -442,7 +442,7 @@ export default function VisitForm({ loc, onClose, onSaved, closeOnSave }: { loc:
 
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Outcome</label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   {INTEREST_LEVELS.map(level => {
                     const active = form.interest_level === level;
                     return (

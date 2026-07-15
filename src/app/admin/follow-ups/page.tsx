@@ -125,6 +125,7 @@ export default function FollowUpsPage() {
   const [emailError, setEmailError] = useState<{ id: string; msg: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<FollowUp | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [timelineTarget, setTimelineTarget] = useState<{ id: string; name: string } | null>(null);
 
   const fetchFollowups = async () => {
@@ -310,12 +311,19 @@ export default function FollowUpsPage() {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
+    setDeleteError(null);
     try {
-      await fetch(`/api/follow-ups/${deleteTarget.id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/follow-ups/${deleteTarget.id}`, { method: 'DELETE' });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) {
+        setDeleteError(json?.error || `Delete failed (${res.status})`);
+        return;
+      }
       setDeleteTarget(null);
       fetchFollowups();
     } catch (err) {
       console.error(err);
+      setDeleteError('Network error — try again');
     } finally {
       setDeleting(false);
     }
@@ -1025,8 +1033,11 @@ export default function FollowUpsPage() {
             <p className="text-sm text-gray-600 mb-6">
               Archives <strong>{deleteTarget.location.name}</strong> and skips all its follow-ups. It disappears from every list but stays recoverable in the database.
             </p>
+            {deleteError && (
+              <p className="text-xs text-red-600 font-semibold mb-4">✗ {deleteError}</p>
+            )}
             <div className="flex gap-3">
-              <button onClick={() => setDeleteTarget(null)}
+              <button onClick={() => { setDeleteTarget(null); setDeleteError(null); }}
                 className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 rounded-lg text-sm">
                 Cancel
               </button>

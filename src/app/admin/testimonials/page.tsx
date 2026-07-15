@@ -21,6 +21,7 @@ export default function TestimonialsPage() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Testimonial | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const fetch_ = async () => {
     setLoading(true);
@@ -38,7 +39,17 @@ export default function TestimonialsPage() {
   const toggleVisible = async (t: Testimonial) => {
     const updated = !t.visible;
     setTestimonials(prev => prev.map(x => x.id === t.id ? { ...x, visible: updated } : x));
-    await fetch(`/api/testimonials/${t.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ visible: updated }) });
+    try {
+      const res = await fetch(`/api/testimonials/${t.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ visible: updated }) });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) {
+        setTestimonials(prev => prev.map(x => x.id === t.id ? { ...x, visible: t.visible } : x));
+        setActionError(json?.error || 'Failed to update visibility');
+      }
+    } catch {
+      setTestimonials(prev => prev.map(x => x.id === t.id ? { ...x, visible: t.visible } : x));
+      setActionError('Network error — visibility not changed');
+    }
   };
 
   const save = async () => {
@@ -68,10 +79,21 @@ export default function TestimonialsPage() {
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
-    await fetch(`/api/testimonials/${deleteTarget.id}`, { method: 'DELETE' });
-    setTestimonials(prev => prev.filter(t => t.id !== deleteTarget.id));
-    setDeleteTarget(null);
-    setDeleting(false);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/testimonials/${deleteTarget.id}`, { method: 'DELETE' });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) {
+        setActionError(json?.error || `Delete failed (${res.status})`);
+        return;
+      }
+      setTestimonials(prev => prev.filter(t => t.id !== deleteTarget.id));
+      setDeleteTarget(null);
+    } catch {
+      setActionError('Network error — delete failed');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -86,6 +108,13 @@ export default function TestimonialsPage() {
           + Add Testimonial
         </button>
       </div>
+
+      {actionError && !deleteTarget && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-600 font-semibold flex items-center justify-between">
+          ✗ {actionError}
+          <button onClick={() => setActionError(null)} className="text-red-400 hover:text-red-600 font-bold px-2">✕</button>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600" /></div>
@@ -195,10 +224,11 @@ export default function TestimonialsPage() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
             <h2 className="text-lg font-bold text-gray-900 mb-2">Delete Testimonial?</h2>
             <p className="text-sm text-gray-500 mb-6">
-              Delete quote from <span className="font-semibold text-gray-700">{deleteTarget.chef_name}</span> ({deleteTarget.restaurant})? This cannot be undone.
+              Delete quote from <span className="font-semibold text-gray-700">{deleteTarget.chef_name}</span> ({deleteTarget.restaurant})? It disappears from the site but stays recoverable in the database.
             </p>
+            {actionError && <p className="text-xs text-red-600 font-semibold mb-4">✗ {actionError}</p>}
             <div className="flex gap-3">
-              <button onClick={() => setDeleteTarget(null)} className="flex-1 px-4 py-2 text-sm font-medium text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition">Cancel</button>
+              <button onClick={() => { setDeleteTarget(null); setActionError(null); }} className="flex-1 px-4 py-2 text-sm font-medium text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition">Cancel</button>
               <button onClick={confirmDelete} disabled={deleting}
                 className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition">
                 {deleting ? 'Deleting...' : 'Delete'}

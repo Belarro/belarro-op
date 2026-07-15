@@ -214,22 +214,36 @@ export default function InventoryPage() {
 
   const handleDeleteSeed = async (id: string) => {
     if (!confirm('Delete this seed stock entry?')) return;
-    await fetch('/api/inventory', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'seeds', id }),
-    });
-    fetchInventory();
+    try {
+      const res = await fetch('/api/inventory', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'seeds', id }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) alert(json?.error || `Delete failed (${res.status})`);
+    } catch {
+      alert('Network error — delete failed');
+    } finally {
+      fetchInventory();
+    }
   };
 
   const handleDeletePackaging = async (id: string) => {
     if (!confirm('Delete this package size?')) return;
-    await fetch('/api/packaging-stock', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id }),
-    });
-    fetchInventory();
+    try {
+      const res = await fetch('/api/packaging-stock', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) alert(json?.error || `Delete failed (${res.status})`);
+    } catch {
+      alert('Network error — delete failed');
+    } finally {
+      fetchInventory();
+    }
   };
 
   const handleSaveQty = async (type: 'seeds' | 'packages' | 'samples', id: string, currentQty: number) => {
