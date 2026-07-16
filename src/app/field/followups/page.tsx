@@ -21,8 +21,27 @@ interface FollowUp {
     name: string;
     contact_person: string | null;
     phone: string | null;
+    email: string | null;
+    language: string | null;
   };
 }
+
+const EMAIL_SUBJECTS: Record<string, Record<number, string>> = {
+  DE: {
+    1: 'Belarro Microgreens - Nach unserem Gespraech heute',
+    2: 'Belarro Microgreens - Kurze Nachfrage',
+    3: 'Belarro Microgreens - Noch interessiert?',
+    4: 'Belarro Microgreens - Letzte Nachricht von uns',
+    5: 'Belarro Microgreens - Wir melden uns ein letztes Mal',
+  },
+  EN: {
+    1: 'Belarro Microgreens - Following our conversation today',
+    2: 'Belarro Microgreens - Quick follow-up',
+    3: 'Belarro Microgreens - Still interested?',
+    4: 'Belarro Microgreens - One last message',
+    5: 'Belarro Microgreens - Final note from us',
+  },
+};
 
 function dueBucket(dueDate: string): 'overdue' | 'today' | 'upcoming' {
   const todayStr = new Date().toLocaleDateString('sv');
@@ -36,6 +55,8 @@ export default function FieldFollowupsPage() {
   const [items, setItems] = useState<FollowUp[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [sendingEmailId, setSendingEmailId] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<{ id: string; msg: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -72,6 +93,37 @@ export default function FieldFollowupsPage() {
     }
   };
 
+  const sendEmail = async (f: FollowUp) => {
+    if (!f.location.email) return;
+    setSendingEmailId(f.id);
+    setEmailError(null);
+    try {
+      const isDE = (f.location.language || '').toUpperCase() !== 'EN';
+      const lang = isDE ? 'DE' : 'EN';
+      const subject = EMAIL_SUBJECTS[lang][f.stage] || (isDE ? 'Belarro Microgreens - Nachricht' : 'Belarro Microgreens - Message');
+      const res = await fetch('/api/send-followup-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: f.location.email,
+          subject,
+          body: f.message_text,
+          language: f.location.language || 'DE',
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        await markSent(f, 'email');
+      } else {
+        setEmailError({ id: f.id, msg: json.error || 'Send failed' });
+      }
+    } catch {
+      setEmailError({ id: f.id, msg: 'Network error — try again' });
+    } finally {
+      setSendingEmailId(null);
+    }
+  };
+
   return (
     <div className="p-4 pb-8 space-y-3">
       <div className="flex items-center justify-between">
@@ -105,19 +157,31 @@ export default function FieldFollowupsPage() {
                 {f.message_text}
               </div>
 
+              {emailError && emailError.id === f.id && (
+                <div className="mt-2 text-[11px] text-red-600 font-semibold">✗ Email failed: {emailError.msg}</div>
+              )}
+
               <div className="flex gap-2 mt-2.5">
                 {wa ? (
-                  <a href={wa} target="_blank" rel="noreferrer"
+                  <a href={wa} target="_blank" rel="noreferrer" onClick={() => markSent(f, 'whatsapp')}
                     className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold py-2 rounded-lg text-center">
                     WhatsApp
                   </a>
                 ) : (
                   <span className="flex-1 bg-gray-50 text-gray-300 text-xs font-semibold py-2 rounded-lg text-center">No phone</span>
                 )}
-                <button disabled={busyId === f.id} onClick={() => markSent(f, wa ? 'whatsapp' : 'other')}
-                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold py-2 rounded-lg disabled:opacity-50">
-                  ✓ Mark sent
-                </button>
+                {f.location.email && (
+                  <button disabled={sendingEmailId === f.id} onClick={() => sendEmail(f)}
+                    className="flex-1 text-white text-xs font-semibold py-2 rounded-lg disabled:opacity-50" style={{ background: '#4285F4' }}>
+                    {sendingEmailId === f.id ? '…' : 'Email'}
+                  </button>
+                )}
+                {!wa && !f.location.email && (
+                  <button disabled={busyId === f.id} onClick={() => markSent(f, 'other')}
+                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold py-2 rounded-lg disabled:opacity-50">
+                    ✓ Mark sent
+                  </button>
+                )}
               </div>
             </div>
           );

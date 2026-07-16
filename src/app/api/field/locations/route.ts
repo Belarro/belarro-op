@@ -116,12 +116,30 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: false, error: 'location_id or location_name required' }, { status: 400 });
       }
 
-      // locations has a unique constraint on (location_name, business_address)
-      // — a plain re-insert 409s (raw Postgres error) if this exact place
-      // already exists (even archived). Treat that as "revisit an existing
-      // place" instead of crashing: look it up first and fall into the
-      // existing-location branch below.
-      if (business_address) {
+      // Google's place_id is the stable, unique identifier for a real-world
+      // place — it doesn't drift with formatting the way location_name/
+      // business_address do (Google can return the same restaurant with
+      // slightly different whitespace/abbreviations/suffixes on different
+      // visits). Match on it FIRST so re-visiting the same POI always lands
+      // on the same location row instead of silently forking a duplicate
+      // (which is how a chef's email looked "different" after a save — it
+      // was actually two different rows for the same place).
+      if (place_id) {
+        const byPlaceId = await fetchFromSupabase(
+          `/locations?direct_link=ilike.*${encodeURIComponent(place_id)}*&select=id&limit=1`
+        );
+        if (byPlaceId && byPlaceId.length > 0) {
+          locId = byPlaceId[0].id;
+        }
+      }
+
+      // Fallback: locations has a unique constraint on (location_name,
+      // business_address) — a plain re-insert 409s (raw Postgres error) if
+      // this exact place already exists (even archived). Treat that as
+      // "revisit an existing place" instead of crashing: look it up first
+      // and fall into the existing-location branch below. Only used when we
+      // have no place_id to go on (manually typed places, older records).
+      if (!locId && business_address) {
         const existing = await fetchFromSupabase(
           `/locations?location_name=eq.${encodeURIComponent(location_name)}&business_address=eq.${encodeURIComponent(business_address)}&select=id&limit=1`
         );

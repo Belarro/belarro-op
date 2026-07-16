@@ -466,7 +466,14 @@ export default function FieldMap({
   };
 
   const selectSearchResult = (place: any) => {
-    const loc: Partial<MapLocation> = {
+    // Reuse the existing saved record (with its real contact/email/notes)
+    // if this place was already logged, instead of opening a blank "new
+    // place" form that would overwrite that data with empty fields on save.
+    const existing = locations.find(l =>
+      (l.direct_link && place.id && l.direct_link.includes(place.id)) ||
+      l.location_name === (place.displayName || '') || l.business_address === (place.formattedAddress || '')
+    );
+    const loc: Partial<MapLocation> = existing || {
       location_name: place.displayName || 'Unknown Place',
       business_address: place.formattedAddress || '',
       business_phone: place.nationalPhoneNumber || '',
